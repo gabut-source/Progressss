@@ -302,7 +302,9 @@ function renderMap(rows, calculation) {
     const lon=Number(r.lon), lat=Number(r.lat); if (!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lon)>180||Math.abs(lat)>90) continue;
     const sampleKey=keyOf(r); if (seen.has(sampleKey)) continue; seen.add(sampleKey);
     const marker=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:1.5,fillColor:'#e76f51',fillOpacity:.95});
-    marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}`);
+    const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
+    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','LAND_VALUE']);
+    marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}`);
     markerLayer.addLayer(marker);
   }
   if (polygonLayer) { map.removeLayer(polygonLayer); polygonLayer=null; }
