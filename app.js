@@ -15,6 +15,8 @@ let shouldFit = true;
 let supabaseClient = null;
 let currentUser = null;
 let legacyBrowserData = {};
+const remoteCitiesLoaded = new Set();
+let citySelectionRequest = 0;
 
 function getDb() {
   if (dbPromise) return dbPromise;
@@ -80,14 +82,20 @@ async function loadRemoteCity(city) {
     from+=pageSize;
   }
   rowsByCity[city]=records.map(row=>({zone:row.zone,sample:row.sample_number,ident:row.ident,surveyor:row.surveyor,date:row.sample_date,lon:row.longitude,lat:row.latitude,zoneSource:row.zone_source,properties:row.properties||{}}));
+  remoteCitiesLoaded.add(city);
 }
 
 async function loadRemoteData() {
   const {data,error}=await supabaseClient.from('city_zones').select('city');
   if(error)throw error;
   for(const row of data||[])addCityOption(row.city);
-  const cities=unique([...Object.keys(rowsByCity),...(data||[]).map(row=>row.city)]);
-  for(const city of cities)await loadRemoteCity(city);
+  try{
+    const savedCity=localStorage.getItem('progress-selected-city');
+    if(savedCity&&[...citySelect.options].some(option=>option.value===savedCity))citySelect.value=savedCity;
+  }catch{}
+  // Do not download every large district polygon on each page load. Load only
+  // the selected district; the selector loads another district on demand.
+  await loadRemoteCity(citySelect.value);
 }
 
 function sampleToRecord(row,city) {
@@ -103,8 +111,36 @@ async function upsertRemoteSamples(city,rows) {
   }
 }
 
+async function replaceRemoteSamples(city,rows) {
+  if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
+  const records=[...new Map(rows.map(row=>{
+    const record=sampleToRecord(row,city);
+    return [`${record.sample_date}\u0000${record.ident}\u0000${record.zone}`,record];
+  })).values()];
+  for(let start=0;start<records.length;start+=250){
+    const {error}=await supabaseClient.from('samples').upsert(records.slice(start,start+250),{onConflict:'city,sample_date,ident,zone'});
+    if(error)throw error;
+  }
+
+  // Keep the old dataset until all incoming rows have been saved successfully.
+  const keep=new Set(records.map(record=>`${record.sample_date}\u0000${record.ident}\u0000${record.zone}`));
+  const existing=[];let from=0;const pageSize=1000;
+  while(true){
+    const {data,error}=await supabaseClient.from('samples').select('id,ident,sample_date,zone').eq('city',city).order('id',{ascending:true}).range(from,from+pageSize-1);
+    if(error)throw error;
+    existing.push(...(data||[]));
+    if(!data||data.length<pageSize)break;
+    from+=pageSize;
+  }
+  const stale=existing.filter(record=>!keep.has(`${record.sample_date}\u0000${record.ident}\u0000${record.zone}`)).map(record=>record.id);
+  for(let start=0;start<stale.length;start+=200){
+    const {error}=await supabaseClient.from('samples').delete().eq('city',city).in('id',stale.slice(start,start+200));
+    if(error)throw error;
+  }
+}
+
 async function saveSamples(city,rows) {
-  if(supabaseClient)return upsertRemoteSamples(city,rows);
+  if(supabaseClient)return replaceRemoteSamples(city,rows);
   await persistCity(city);
 }
 
@@ -539,14 +575,27 @@ document.getElementById('shpInput').addEventListener('change',async event=>{
     beginLoading('Membaca ZIP shapefile titik…');await browserPaint();
     const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
     if(!result.imported.length)throw new Error('Tidak ada feature titik dengan atribut nomor sampel, surveyor, dan tanggal. Periksa isi DBF.');
-    const before=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],result.imported); const added=rowsByCity[city].length-before;
-    setLoadingStatus('Menyimpan titik sampel ke Supabase…');await saveSamples(city,result.imported);setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();shouldFit=true; rebuildFilters(); update();
-    statusLine.innerHTML=`SHP <strong>${escapeHtml(file.name)}</strong> ditambahkan: ${added} baris baru; ${result.skipped} feature dilewati${result.unassigned?`; ${result.unassigned} titik belum masuk zona` : ''}.`;
+    const cleanRows=mergeRows([],result.imported);
+    setLoadingStatus('Mengganti data sampel lama dengan unggahan terbaru…');await saveSamples(city,cleanRows);rowsByCity[city]=cleanRows;setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();shouldFit=true; rebuildFilters(); update();
+    statusLine.innerHTML=`SHP <strong>${escapeHtml(file.name)}</strong> berhasil mengganti data: ${cleanRows.length.toLocaleString('id-ID')} titik; ${result.skipped} feature dilewati${result.unassigned?`; ${result.unassigned} titik belum masuk zona` : ''}.`;
   }catch(error){statusLine.textContent=`Unggah SHP sampel gagal: ${error.message||error}`;alert(`SHP tidak dapat dimuat: ${error.message||error}`);}
   finally{endLoading();event.target.value='';}
 });
 
-citySelect.addEventListener('change',()=>{shouldFit=true;rebuildFilters();document.getElementById('adminCityName').textContent=citySelect.value;update();});
+citySelect.addEventListener('change',async()=>{
+  const city=citySelect.value;const request=++citySelectionRequest;shouldFit=true;
+  let loadError='';
+  document.getElementById('adminCityName').textContent=city;
+  try{localStorage.setItem('progress-selected-city',city);}catch{}
+  if(supabaseClient&&!remoteCitiesLoaded.has(city)){
+    beginLoading(`Memuat polygon dan sampel ${city}…`);
+    try{await loadRemoteCity(city);}catch(error){loadError=`Data ${city} belum dapat dimuat: ${error.message||error}`;}
+    finally{if(request===citySelectionRequest)endLoading();}
+  }
+  if(request!==citySelectionRequest)return;
+  rebuildFilters();update();
+  if(loadError)statusLine.textContent=loadError;
+});
 surveyorSelect.addEventListener('change',update);
 document.getElementById('excelInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
@@ -563,9 +612,9 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
       imported.push({zone:text(getField(r,['NOZN','NO ZN','NO ZONA'])),sample:text(sample),ident:text(getField(r,['Nomor Identifikasi','ID Sampel']))||text(sample),surveyor:text(surveyor),date,lon:x==null||x===''?null:Number(x),lat:y==null||y===''?null:Number(y),zoneSource:'attribute',properties:row});
     }
     if(!imported.length)throw new Error('Tidak ada baris sampel dengan tanggal dan surveyor yang valid.');
-    const city=citySelect.value; const beforeCount=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],imported); const addedCount=rowsByCity[city].length-beforeCount;
-    setLoadingStatus('Menyimpan data Excel ke Supabase…');await saveSamples(city,imported);setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();
-    shouldFit=true; rebuildFilters(); update(); statusLine.innerHTML=`Excel untuk <strong>${escapeHtml(city)}</strong> ditambahkan: ${addedCount.toLocaleString('id-ID')} baris baru.`;
+    const city=citySelect.value;const cleanRows=mergeRows([],imported);
+    setLoadingStatus('Mengganti data sampel lama dengan unggahan terbaru…');await saveSamples(city,cleanRows);rowsByCity[city]=cleanRows;setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();
+    shouldFit=true; rebuildFilters(); update(); statusLine.innerHTML=`Excel untuk <strong>${escapeHtml(city)}</strong> berhasil mengganti data: ${cleanRows.length.toLocaleString('id-ID')} baris.`;
   }catch(error){statusLine.textContent=`Impor Excel gagal: ${error.message||error}`;alert(error.message||String(error));}
   finally{endLoading();event.target.value='';}
 });
@@ -658,9 +707,11 @@ async function init() {
         if(await verifyAdminUser(user)){currentUser=user;adminLogin.hidden=true;adminTools.hidden=false;}
         else await supabaseClient.auth.signOut();
       }
+      beginLoading(`Memuat polygon dan sampel ${citySelect.value}…`);
       await loadRemoteData();
+      endLoading();
       statusLine.textContent='Terhubung ke database bersama. Data akan diperbarui untuk semua pengguna setelah unggahan admin berhasil.';
-    }catch(error){statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa setup Supabase.`;}
+    }catch(error){endLoading();statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa setup Supabase.`;}
   }else{
     await restoreStoredData();
     statusLine.textContent='Supabase belum dikonfigurasi. Data belum tersinkron antar pengguna.';
