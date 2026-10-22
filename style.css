@@ -52,3 +52,57 @@ td.zero{color:#a2b0ad}
 .admin-panel{margin-bottom:18px}
 .admin-city-note strong,.status-line strong{color:#4c897c}
 @media(max-width:780px){main{padding-top:18px}.section-heading{padding:17px}}
+
+/* Phone layout: larger touch targets, stacked filters, and contained table scroll. */
+@media(max-width:640px){
+  html,body{width:100%;overflow-x:hidden}
+  .topbar{padding:12px 14px;justify-content:flex-end}
+  .topbar .header-actions{width:100%;justify-content:flex-end}
+  main{width:100%;padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
+  .filters{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:14px}
+  .filters label{min-width:0;width:100%;gap:7px;font-size:12px}
+  .filters select,.filters input{width:100%;height:46px;padding:0 12px;font-size:16px}
+  .status-line{padding:10px 4px;line-height:1.5;font-size:12px;overflow-wrap:anywhere}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:8px 0 14px}
+  .kpi{min-width:0;padding:13px 12px;gap:7px;border-radius:16px}
+  .kpi span{font-size:11px;line-height:1.3}
+  .kpi strong{font-size:24px;overflow-wrap:anywhere}
+  .kpi small{font-size:10px;line-height:1.35}
+  .section-heading{width:100%;padding:16px;gap:12px}
+  .section-heading h2{font-size:16px;line-height:1.35}
+  .section-heading p{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+  .legend{font-size:10px;gap:8px 12px}
+  .map-panel,.table-panel,.admin-panel,.report-toolbar,.filters{border-radius:17px}
+  #map{height:48vh;min-height:260px;max-height:420px}
+  .map-note{padding:10px 14px;font-size:11px;line-height:1.5}
+  .report-toolbar{margin-top:14px}
+  .report-toolbar .section-heading{align-items:stretch}
+  #downloadReportButton{width:100%;min-height:46px}
+  .tables-grid{gap:12px;margin-top:12px}
+  .table-panel .section-heading{padding:15px 14px 10px}
+  .table-wrap{max-height:55vh;padding:0 10px 12px;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  table{font-size:12px}
+  th,td{padding:9px 10px}
+  td:first-child,th:first-child{min-width:145px}
+  .zone-status-panel td:first-child{min-width:135px}
+  .zone-status-panel th{min-width:105px}
+  .zone-sort-button{min-height:34px;white-space:nowrap}
+  .zone-link{min-height:34px;display:inline-flex;align-items:center}
+  .admin-panel .section-heading{padding:16px 14px 10px}
+  .admin-login{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:0 14px 16px}
+  .admin-login label{min-width:0;width:100%;font-size:12px}
+  .admin-login input{width:100%;height:46px;font-size:16px}
+  .admin-login .button{width:100%;min-height:46px}
+  .admin-tools{padding:0 14px 16px}
+  .admin-tools .header-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+  .admin-tools .button{width:100%;min-height:44px}
+  .admin-city-note,.admin-help{font-size:12px;line-height:1.5}
+}
+@media(max-width:380px){
+  main{padding-right:9px;padding-left:9px}
+  .kpis{gap:7px}
+  .kpi{padding:11px 9px}
+  .kpi strong{font-size:22px}
+  .section-heading{padding:14px}
+  .legend{gap:7px 9px}
+}
