@@ -1,8 +1,8 @@
 /* WebGIS progress viewer: data are deduplicated by Nomor Identifikasi. */
 const DB_NAME = 'webgis-progress-db';
-const BASE_DATA = window.APP_DATA || {};
-let rowsByCity = Object.fromEntries(Object.entries(BASE_DATA).map(([k,v]) => [k, v.slice()]));
-let geoByCity = {};
+const BASE_DATA = window.APP_DATA?.cities || window.APP_DATA || {};
+let rowsByCity = Object.fromEntries(Object.entries(BASE_DATA).map(([k,v]) => [k, Array.isArray(v) ? v.slice() : (Array.isArray(v?.rows) ? v.rows.slice() : [])]));
+let geoByCity = Object.fromEntries(Object.entries(BASE_DATA).filter(([,v]) => v && !Array.isArray(v) && v.geo).map(([k,v]) => [k,v.geo]));
 let dbPromise;
 let markerLayer;
 let polygonLayer;
@@ -26,7 +26,7 @@ async function restoreStoredData() {
   try {
     const db=await getDb();
     const saved=await new Promise((resolve,reject)=>{const tx=db.transaction('cities','readonly'); const req=tx.objectStore('cities').getAll(); req.onsuccess=()=>resolve(req.result||[]); req.onerror=()=>reject(req.error);});
-    for(const item of saved){ if(Array.isArray(item.rows))rowsByCity[item.city]=item.rows; if(item.geo)geoByCity[item.city]=item.geo; if(!citySelect.querySelector(`option[value="${CSS.escape(item.city)}"]`)){const o=document.createElement('option');o.value=item.city;o.textContent=item.city;citySelect.append(o);} }
+    for(const item of saved){ if(Array.isArray(item.rows))rowsByCity[item.city]=mergeRows(rowsByCity[item.city]||[],item.rows); if(item.geo)geoByCity[item.city]=item.geo; if(!citySelect.querySelector(`option[value="${CSS.escape(item.city)}"]`)){const o=document.createElement('option');o.value=item.city;o.textContent=item.city;citySelect.append(o);} }
   } catch(error) { statusLine.textContent=`Penyimpanan browser tidak dapat dibuka: ${error.message||error}`; }
 }
 
@@ -81,7 +81,7 @@ function dedupPoints(rows) {
   return [...seen.values()];
 }
 
-function calculate(rows, threshold) {
+function calculate(rows, threshold, knownZones=null) {
   const byZone=new Map();
   for (const r of rows) {
     if (!r.zone || !r.date) continue;
@@ -98,14 +98,14 @@ function calculate(rows, threshold) {
     for (const [day, samples] of [...byDay.entries()].sort((a,b)=>a[0].localeCompare(b[0]))) {
       const before=total; total += samples.size;
       if (!already && before < threshold && total >= threshold) {
-        already=true; completed.add(zone);
+        already=true; if(!knownZones || knownZones.has(zone))completed.add(zone);
         const persons=unique([...samples.values()].map(r=>r.surveyor));
         const owner=persons.length===1 ? persons[0] : 'Kolaborasi';
         const k=`${day}\u0000${owner}`; awards.set(k,(awards.get(k)||0)+1);
       }
     }
   }
-  return {completed, awards, zoneSampleCounts, zoneCount:byZone.size};
+  return {completed, awards, zoneSampleCounts, zoneCount:knownZones?.size || byZone.size};
 }
 
 function renderTable(id, title, dates, people, valueAt) {
@@ -226,10 +226,14 @@ function update() {
   const threshold=Math.max(1,Number.parseInt(thresholdInput.value,10)||3);
   const source=currentRows();
   const filtered=source.filter(r=>(!cutoff||r.date<=cutoff)&&(!selectedPerson||r.surveyor===selectedPerson));
-  const calc=calculate(filtered,threshold); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
+  const geo=geoByCity[city];
+  const knownZones=geo?new Set(unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey))):null;
+  const calc=calculate(filtered,threshold,knownZones); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
   const dates=allDates(filtered);
+  document.getElementById('zonesTotal').textContent=calc.zoneCount.toLocaleString('id-ID');
   document.getElementById('zonesDone').textContent=calc.completed.size.toLocaleString('id-ID');
-  document.getElementById('zonesRatio').textContent=`dari ${calc.zoneCount.toLocaleString('id-ID')} zona dalam data`;
+  document.getElementById('zonesLeft').textContent=Math.max(0,calc.zoneCount-calc.completed.size).toLocaleString('id-ID');
+  document.getElementById('zonesRatio').textContent=`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent=cutoff?`Sampai ${fmtDate(cutoff)}`:'Semua tanggal';
   const pct=calc.zoneCount?Math.round(calc.completed.size/calc.zoneCount*100):0;
@@ -339,6 +343,18 @@ document.getElementById('geoInput').addEventListener('change',async event=>{
   }
   catch(error){alert(`Polygon tidak dapat dimuat: ${error.message||error}`);}
   event.target.value='';
+});
+
+document.getElementById('publishButton').addEventListener('click',()=>{
+  const cities={};
+  for(const city of Object.keys(rowsByCity)){
+    const rows=rowsByCity[city]||[]; const geo=geoByCity[city]||null;
+    if(rows.length||geo)cities[city]={rows,geo};
+  }
+  const contents=`/* Data bersama WebGIS. Diperbarui oleh admin. */\nwindow.APP_DATA = ${JSON.stringify({cities})};\n`;
+  const blob=new Blob([contents],{type:'text/javascript;charset=utf-8'}); const url=URL.createObjectURL(blob);
+  const link=document.createElement('a'); link.href=url; link.download='data.js'; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  statusLine.textContent='Berkas data.js berhasil disiapkan. Ganti data.js di repository GitHub dengan berkas ini, lalu push agar semua pengguna menerima pembaruan.';
 });
 
 async function init() { await restoreStoredData(); rebuildFilters(); update(); }

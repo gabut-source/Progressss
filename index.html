@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WebGIS Progress Survey Zona</title>
+  <title>Progress</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
@@ -23,6 +23,7 @@
       <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
       <label class="button secondary" for="geoInput">Muat / ganti zona</label>
       <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
+      <button id="publishButton" class="button secondary" type="button">Unduh data publikasi</button>
     </div>
   </header>
 
@@ -46,8 +47,10 @@
     <section id="statusLine" class="status-line" aria-live="polite"></section>
 
     <section class="kpis" aria-label="Ringkasan progress">
+      <article class="kpi"><span>Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small>Polygon kabupaten terpilih</small></article>
       <article class="kpi"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
-      <article class="kpi"><span>Titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Sampai tanggal terpilih</small></article>
+      <article class="kpi"><span>Sisa zona</span><strong id="zonesLeft">0</strong><small>Belum mencapai target sampel</small></article>
+      <article class="kpi"><span>Total titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Sampai tanggal terpilih</small></article>
       <article class="kpi"><span>Progress zona</span><strong id="progressPercent">0%</strong><small id="progressHint">Berdasarkan filter aktif</small></article>
       <article class="kpi"><span>Surveyor aktif</span><strong id="surveyorCount">0</strong><small id="surveyorHint">Pada kabupaten terpilih</small></article>
     </section>
@@ -58,7 +61,7 @@
         <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span></div>
       </div>
       <div id="map" role="application" aria-label="Peta polygon zona dan titik sampel"></div>
-      <p class="map-note">Unggah SHP titik dalam ZIP setiap hari. File zona disimpan di browser dan hanya perlu diganti jika poligonnya berubah.</p>
+      <p class="map-note">Admin mengunggah data SHP, lalu pilih “Unduh data publikasi”. Ganti file <strong>data.js</strong> di repository GitHub dengan berkas unduhan dan push agar data yang sama tampil bagi semua pengguna setelah deploy.</p>
     </section>
 
     <section class="tables-grid">
@@ -71,7 +74,7 @@
         <div class="table-wrap"><table id="sampleTable"></table></div>
       </article>
     </section>
-    <footer>Riwayat titik dan polygon zona disimpan di browser pada perangkat ini. Unggahan harian ditambahkan ke riwayat.</footer>
+    <footer>Unggahan tersimpan di browser admin sampai dipublikasikan. Setelah file data.js diperbarui di GitHub, semua pengguna melihat dataset bersama yang sama.</footer>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
