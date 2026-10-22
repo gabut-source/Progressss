@@ -4,17 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Progress</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#f3faf8', 100: '#e5f4ef', 500: '#5b9b8b', 600: '#427f72', 700: '#356b61' }, mist: '#eaf1f8', lilac: '#f1eef9' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="topbar">
+<body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
+  <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
     <div class="header-actions">
-      <button id="adminToggle" class="button secondary" type="button">Admin</button>
+      <button id="adminToggle" class="button secondary transition duration-200 hover:-translate-y-0.5 hover:shadow-md" type="button">Admin</button>
     </div>
   </header>
 
-  <main>
+  <main class="mx-auto max-w-screen-2xl">
     <section id="adminPanel" class="admin-panel" hidden>
       <div class="section-heading"><div><h2>Halaman Admin</h2><p>Masuk untuk mengelola data zona dan titik sampel.</p></div></div>
       <form id="adminLogin" class="admin-login">
@@ -39,7 +41,7 @@
       </div>
     </section>
 
-    <section class="filters" aria-label="Filter data">
+    <section class="filters shadow-sm transition-shadow hover:shadow-md" aria-label="Filter data">
       <label>Kabupaten
         <select id="citySelect"></select>
       </label>
@@ -51,15 +53,15 @@
     <section id="statusLine" class="status-line" aria-live="polite"></section>
 
     <section class="kpis" aria-label="Ringkasan progress">
-      <article class="kpi"><span>Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small>Polygon kabupaten terpilih</small></article>
-      <article class="kpi"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
-      <article class="kpi"><span>Sisa zona</span><strong id="zonesLeft">0</strong><small>Belum mencapai target sampel</small></article>
-      <article class="kpi"><span>Total titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Semua tanggal</small></article>
-      <article class="kpi"><span>Progress zona</span><strong id="progressPercent">0%</strong><small id="progressHint">Berdasarkan filter aktif</small></article>
-      <article class="kpi"><span>Surveyor aktif</span><strong id="surveyorCount">0</strong><small id="surveyorHint">Pada kabupaten terpilih</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small>Polygon kabupaten terpilih</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Sisa zona</span><strong id="zonesLeft">0</strong><small>Belum mencapai target sampel</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Total titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Semua tanggal</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Progress zona</span><strong id="progressPercent">0%</strong><small id="progressHint">Berdasarkan filter aktif</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Surveyor aktif</span><strong id="surveyorCount">0</strong><small id="surveyorHint">Pada kabupaten terpilih</small></article>
     </section>
 
-    <section class="map-panel">
+    <section class="map-panel shadow-sm">
       <div class="section-heading">
         <div><h2>Peta zona dan titik sampel</h2><p id="mapHint">Titik sampel mengikuti kabupaten dan surveyor terpilih.</p></div>
         <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span></div>

@@ -4,3 +4,51 @@
  .status-line[data-loading="true"]{display:flex;align-items:center;gap:9px}.status-line[data-loading="true"]::before{content:"";flex:0 0 14px;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:#0f766e;border-radius:50%;animation:progress-spin .8s linear infinite}@keyframes progress-spin{to{transform:rotate(360deg)}}
  .report-toolbar{margin-top:16px;background:#fff;border:1px solid #e2e8f0;border-radius:13px}.zone-sort-button{padding:0;border:0;background:transparent;color:#334155;font:inherit;font-weight:700;cursor:pointer}.zone-sort-button:hover{color:#0f766e}.zone-status-panel th{min-width:130px}
  .zone-no{color:#64748b;background:#f8fafc;font-weight:600}
+
+/* Calm visual layer, alongside Tailwind utility classes in index.html. */
+:root{color-scheme:light;color:#233b39;background:#f3faf8}
+body{background:radial-gradient(ellipse at 8% 0%,#e4f2ed 0,transparent 34%),radial-gradient(ellipse at 96% 8%,#edeafa 0,transparent 30%),#f5f8fb;color:#263b3a}
+.topbar{background:rgba(255,255,255,.82);border-bottom:1px solid rgba(211,225,221,.8);box-shadow:0 8px 28px rgba(52,83,77,.05)}
+main{padding-top:28px}
+.filters,.kpi,.map-panel,.table-panel,.admin-panel,.report-toolbar{border-color:#e1ebe8;border-radius:20px;box-shadow:0 8px 24px rgba(50,82,76,.055)}
+.filters{background:rgba(255,255,255,.86);padding:18px}
+.filters select,.filters input,.admin-login input{border-color:#d8e5e1;border-radius:12px;transition:border-color .2s,box-shadow .2s}
+.filters select:focus,.filters input:focus,.admin-login input:focus{outline:none;border-color:#8bbcaf;box-shadow:0 0 0 4px rgba(91,155,139,.13)}
+.button{border-color:#dbe7e3;border-radius:13px;min-height:42px;box-shadow:0 2px 5px rgba(50,82,76,.035)}
+.button:hover{border-color:#9fc8bc;color:#427f72}
+.button.primary{background:linear-gradient(135deg,#5b9b8b,#4a887a);border-color:#4a887a;color:#fff}
+.button.primary:hover{background:linear-gradient(135deg,#4b8c7c,#3d786c);color:#fff}
+.button.secondary{background:#f8fbfa}
+.kpi{background:rgba(255,255,255,.9);padding:20px 21px;gap:9px}
+.kpi:nth-child(3n+1){background:linear-gradient(145deg,#fff,#f1faf6)}
+.kpi:nth-child(3n+2){background:linear-gradient(145deg,#fff,#f3f6fc)}
+.kpi:nth-child(3n){background:linear-gradient(145deg,#fff,#f7f4fc)}
+.kpi span{color:#718581;letter-spacing:.01em}
+.kpi strong{color:#294b46;font-size:30px}
+.kpi small{color:#829490}
+.map-panel,.table-panel,.admin-panel{background:rgba(255,255,255,.91)}
+.section-heading{padding:20px 22px}
+.section-heading h2{color:#294541;font-size:17px;letter-spacing:-.015em}
+.section-heading p,.map-note,.legend{color:#7a8e89}
+#map{background:#eaf1f1}
+.map-note{border-top-color:#edf3f1}
+.report-toolbar{background:rgba(255,255,255,.82);margin-top:20px}
+.tables-grid{gap:18px;margin-top:18px}
+.table-wrap{padding:0 18px 18px}
+table{font-size:12px;color:#425c57}
+th,td{border-color:#e4ece9;padding:9px 11px}
+th{background:#edf5f2;color:#47645d}
+td:first-child{background:#fff}
+th:first-child{background:#edf5f2}
+tbody tr:nth-child(even) td{background:#fbfdfc}
+tbody tr:nth-child(even) td:first-child{background:#f8fbfa}
+td.positive{color:#377866}
+td.zero{color:#a2b0ad}
+.zone-done{color:#327762;background:#e8f6ee}
+.zone-pending{color:#b55b61;background:#fff0ef}
+.zone-no{color:#718581;background:#f2f6f5}
+.zone-link{color:#4c897c}
+.zone-link:hover{color:#7c70a5}
+.admin-panel{margin-bottom:18px}
+.admin-city-note strong,.status-line strong{color:#4c897c}
+@media(max-width:780px){main{padding-top:18px}.section-heading{padding:17px}}
