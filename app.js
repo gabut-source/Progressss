@@ -9,6 +9,7 @@ let polygonLayer;
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
+const zoneIndexCache = new WeakMap();
 let shouldFit = true;
 let supabaseClient = null;
 let currentUser = null;
@@ -112,6 +113,16 @@ const citySelect = document.getElementById('citySelect');
 const surveyorSelect = document.getElementById('surveyorSelect');
 const TARGET_SAMPLES_PER_ZONE = 3;
 const statusLine = document.getElementById('statusLine');
+let loadingTimer=null;
+let loadingStartedAt=0;
+let loadingMessage='';
+function beginLoading(message){
+  clearInterval(loadingTimer);loadingStartedAt=Date.now();setLoadingStatus(message);
+  loadingTimer=setInterval(()=>{const seconds=Math.floor((Date.now()-loadingStartedAt)/1000);statusLine.textContent=`${loadingMessage} (${seconds} dtk)`;},1000);
+}
+function setLoadingStatus(message){loadingMessage=message;statusLine.dataset.loading='true';statusLine.textContent=message;}
+function endLoading(){clearInterval(loadingTimer);loadingTimer=null;delete statusLine.dataset.loading;}
+function browserPaint(){return new Promise(resolve=>requestAnimationFrame(()=>resolve()));}
 const fmtDate = value => {
   if (!value) return '';
   const [y,m,d] = value.split('-');
@@ -268,9 +279,25 @@ function pointInPolygonGeometry(point,geometry) {
   const polygons=geometry.type==='Polygon'?[geometry.coordinates]:geometry.type==='MultiPolygon'?geometry.coordinates:[];
   return polygons.some(poly=>poly.length&&pointInRing(point,poly[0])&&!poly.slice(1).some(hole=>pointInRing(point,hole)));
 }
+function geometryBounds(geometry){
+  const bounds=[Infinity,Infinity,-Infinity,-Infinity];const stack=[geometry?.coordinates];
+  while(stack.length){
+    const current=stack.pop();if(!Array.isArray(current))continue;
+    if(typeof current[0]==='number'&&typeof current[1]==='number'){
+      bounds[0]=Math.min(bounds[0],current[0]);bounds[1]=Math.min(bounds[1],current[1]);bounds[2]=Math.max(bounds[2],current[0]);bounds[3]=Math.max(bounds[3],current[1]);
+    }else for(const child of current)stack.push(child);
+  }
+  return Number.isFinite(bounds[0])?bounds:null;
+}
+function zoneSpatialIndex(geo){
+  if(!geo||typeof geo!=='object')return [];
+  if(zoneIndexCache.has(geo))return zoneIndexCache.get(geo);
+  const index=(geo.features||[]).map(feature=>({feature,zone:featureZone(feature),bounds:geometryBounds(feature.geometry)})).filter(item=>item.zone!=null&&item.bounds);
+  zoneIndexCache.set(geo,index);return index;
+}
 function zonesAtPoint(lon,lat,geo) {
   if(!geo)return [];
-  return unique((geo.features||[]).filter(f=>pointInPolygonGeometry([lon,lat],f.geometry)).map(featureZone).filter(v=>v!=null).map(String));
+  return unique(zoneSpatialIndex(geo).filter(item=>lon>=item.bounds[0]&&lon<=item.bounds[2]&&lat>=item.bounds[1]&&lat<=item.bounds[3]&&pointInPolygonGeometry([lon,lat],item.feature.geometry)).map(item=>String(item.zone)));
 }
 function reassignSpatialRows(city,geo) {
   const rows=rowsByCity[city]||[]; const kept=rows.filter(r=>r.zoneSource!=='spatial');
@@ -312,10 +339,7 @@ function renderMap(rows, calculation) {
   let polygonCount=0;
   if (geo) {
     polygonLayer=L.geoJSON(geo,{
-      filter: feature => {
-        const p=feature.properties||{}; const area=p.WADMKK||p.wadmkk||p.KABUPATEN||p.kabupaten||p.CITY||p.city;
-        return !area || String(area).toLowerCase().includes(citySelect.value.toLowerCase());
-      },
+      filter: feature => ['Polygon','MultiPolygon'].includes(feature.geometry?.type),
       style: feature => {
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
         return {color:id===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:id===selectedZoneId?3:1.4,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:.27};
@@ -422,14 +446,14 @@ function importSampleFeatures(geo,city) {
 document.getElementById('shpInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
   try{
-    statusLine.textContent='Membaca ZIP shapefile titik…';
+    beginLoading('Membaca ZIP shapefile titik…');await browserPaint();
     const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
     if(!result.imported.length)throw new Error('Tidak ada feature titik dengan atribut nomor sampel, surveyor, dan tanggal. Periksa isi DBF.');
     const before=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],result.imported); const added=rowsByCity[city].length-before;
-    await saveSamples(city,result.imported); shouldFit=true; rebuildFilters(); update();
+    setLoadingStatus('Menyimpan titik sampel ke Supabase…');await saveSamples(city,result.imported);setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();shouldFit=true; rebuildFilters(); update();
     statusLine.innerHTML=`SHP <strong>${escapeHtml(file.name)}</strong> ditambahkan: ${added} baris baru; ${result.skipped} feature dilewati${result.unassigned?`; ${result.unassigned} titik belum masuk zona` : ''}.`;
-  }catch(error){alert(`SHP tidak dapat dimuat: ${error.message||error}`);}
-  event.target.value='';
+  }catch(error){statusLine.textContent=`Unggah SHP sampel gagal: ${error.message||error}`;alert(`SHP tidak dapat dimuat: ${error.message||error}`);}
+  finally{endLoading();event.target.value='';}
 });
 
 citySelect.addEventListener('change',()=>{shouldFit=true;rebuildFilters();document.getElementById('adminCityName').textContent=citySelect.value;update();});
@@ -437,6 +461,7 @@ surveyorSelect.addEventListener('change',update);
 document.getElementById('excelInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
   try {
+    beginLoading('Membaca file Excel…');await browserPaint();
     if(!window.XLSX)throw new Error('Pustaka Excel tidak termuat. Periksa koneksi internet lalu muat ulang halaman.');
     const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
     const required=['NOZN','Nomor Sampel','Nama Surveyor','Tanggal Pelaksanaan']; let raw=null;
@@ -449,21 +474,27 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
     }
     if(!imported.length)throw new Error('Tidak ada baris sampel dengan tanggal dan surveyor yang valid.');
     const city=citySelect.value; const beforeCount=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],imported); const addedCount=rowsByCity[city].length-beforeCount;
-    await saveSamples(city,imported);
+    setLoadingStatus('Menyimpan data Excel ke Supabase…');await saveSamples(city,imported);setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();
     shouldFit=true; rebuildFilters(); update(); statusLine.innerHTML=`Excel untuk <strong>${escapeHtml(city)}</strong> ditambahkan: ${addedCount.toLocaleString('id-ID')} baris baru.`;
-  }catch(error){alert(error.message||String(error));}
-  event.target.value='';
+  }catch(error){statusLine.textContent=`Impor Excel gagal: ${error.message||error}`;alert(error.message||String(error));}
+  finally{endLoading();event.target.value='';}
 });
 document.getElementById('geoInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
   try{
+    beginLoading('Membaca ZIP shapefile zona…');await browserPaint();
     let geo;
     if(file.name.toLowerCase().endsWith('.zip'))geo=await readShapefile(file); else geo=featureCollection(JSON.parse(await file.text()));
-    const city=citySelect.value; geoByCity[city]=geo; reassignSpatialRows(city,geo); await saveZone(city,geo); shouldFit=true; update();
-    statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan: ${geo.features.length.toLocaleString('id-ID')} feature.`;
+    const polygonFeatures=geo.features.filter(feature=>['Polygon','MultiPolygon'].includes(feature.geometry?.type));
+    if(!polygonFeatures.length)throw new Error('File tidak berisi polygon. Unggah ZIP shapefile zona yang berisi .shp, .shx, .dbf, dan .prj.');
+    geo={...geo,features:polygonFeatures};
+    setLoadingStatus(`Menyiapkan ${polygonFeatures.length.toLocaleString('id-ID')} polygon zona…`);await browserPaint();
+    const city=citySelect.value; geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona…');await browserPaint();reassignSpatialRows(city,geo);
+    setLoadingStatus('Menyimpan polygon ke Supabase…');await saveZone(city,geo);setLoadingStatus('Memuat polygon dan memperbarui peta…');await browserPaint();shouldFit=true; update();
+    statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan dan ditampilkan: ${geo.features.length.toLocaleString('id-ID')} zona.`;
   }
-  catch(error){alert(`Polygon tidak dapat dimuat: ${error.message||error}`);}
-  event.target.value='';
+  catch(error){statusLine.textContent=`Unggah zona gagal: ${error.message||error}`;alert(`Polygon tidak dapat dimuat: ${error.message||error}`);}
+  finally{endLoading();event.target.value='';}
 });
 
 const adminPanel=document.getElementById('adminPanel');
