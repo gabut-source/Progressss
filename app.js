@@ -425,15 +425,18 @@ adminLogin.addEventListener('submit',async event=>{
   const message=document.getElementById('adminMessage');
   if(!supabaseClient){message.textContent='Supabase belum dikonfigurasi. Isi URL dan publishable key di supabase-config.js.';return;}
   message.textContent='Memeriksa akun…';
-  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
-  if(error){message.textContent='Login gagal. Periksa email dan password.';return;}
   try{
+    const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+    if(error){message.textContent='Email belum terdaftar atau password salah. Periksa kembali email dan password akun Supabase Anda.';return;}
     if(!await verifyAdminUser(data.user)){
       await supabaseClient.auth.signOut(); message.textContent='Akun ini belum diberi akses admin.';return;
     }
     currentUser=data.user; adminLogin.hidden=true; adminTools.hidden=false; message.textContent=''; document.getElementById('adminPassword').value='';
     document.getElementById('adminCityName').textContent=citySelect.value;
-  }catch(error){await supabaseClient.auth.signOut();message.textContent=`Akses admin belum siap: ${error.message||error}`;}
+  }catch(error){
+    await supabaseClient.auth.signOut().catch(()=>{});
+    message.textContent=`Tidak dapat menghubungi Supabase atau memeriksa akses admin. Periksa koneksi dan konfigurasi. ${error.message||error}`;
+  }
 });
 document.getElementById('adminLogout').addEventListener('click',async()=>{if(supabaseClient)await supabaseClient.auth.signOut();currentUser=null;adminTools.hidden=true;adminLogin.hidden=false;adminLogin.reset();});
 document.getElementById('migrateLocalButton').addEventListener('click',async()=>{

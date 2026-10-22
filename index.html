@@ -20,7 +20,7 @@
     <section id="adminPanel" class="admin-panel" hidden>
       <div class="section-heading"><div><h2>Halaman Admin</h2><p>Masuk untuk mengelola data zona dan titik sampel.</p></div></div>
       <form id="adminLogin" class="admin-login">
-        <label>Username<input id="adminUsername" type="text" autocomplete="username" required></label>
+        <label>Email admin<input id="adminEmail" type="email" autocomplete="username" required></label>
         <label>Password<input id="adminPassword" type="password" autocomplete="current-password" required></label>
         <button class="button primary" type="submit">Masuk</button>
         <span id="adminMessage" role="status"></span>
@@ -34,10 +34,10 @@
           <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
           <label class="button secondary" for="excelInput">Tambah Excel</label>
           <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
-          <button id="publishButton" class="button secondary" type="button">Unduh data publikasi</button>
+          <button id="migrateLocalButton" class="button secondary" type="button" hidden>Impor data lama dari browser</button>
           <button id="adminLogout" class="button ghost" type="button">Keluar</button>
         </div>
-        <p class="admin-help">Untuk menampilkan unggahan kepada semua pengguna, ganti <code>data.js</code> di GitHub dengan file publikasi, lalu commit dan push. Login halaman ini bukan perlindungan keamanan untuk situs publik.</p>
+        <p class="admin-help">Unggahan akan disimpan ke database dan tersedia bagi pengguna lain setelah berhasil.</p>
       </div>
     </section>
 
@@ -67,7 +67,7 @@
         <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span></div>
       </div>
       <div id="map" role="application" aria-label="Peta polygon zona dan titik sampel"></div>
-      <p class="map-note">Target zona tetap 3 titik sampel. Data publik bersama dimuat dari <strong>data.js</strong> setelah dipublikasikan admin melalui GitHub.</p>
+      <p class="map-note">Target zona tetap 3 titik sampel. Data polygon dan titik sampel dimuat dari database bersama.</p>
     </section>
 
     <section class="tables-grid">
@@ -87,6 +87,8 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/shpjs@6.2.0/dist/shp.min.js"></script>
   <script src="data.js"></script>
-  <script src="app.js?v=admin-page-1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js?v=supabase-2"></script>
 </body>
 </html>
