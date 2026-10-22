@@ -1,0 +1,10 @@
+# Hindari memasukkan file data lapangan ke repo GitHub
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.zip
+*.geojson
+*.gpkg
+*.gdb/

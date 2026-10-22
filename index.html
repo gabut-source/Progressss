@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebGIS Progress Survey Zona</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">WEBGIS • MONITORING LAPANGAN</p>
+      <h1>Progress Survey Zona</h1>
+      <p class="subtitle">Pantau pencapaian zona dan titik sampel berdasarkan tanggal dan surveyor.</p>
+    </div>
+    <div class="header-actions">
+      <label class="button primary" for="shpInput">Tambah SHP sampel</label>
+      <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
+      <label class="button secondary" for="excelInput">Tambah Excel</label>
+      <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+      <label class="button secondary" for="geoInput">Muat / ganti zona</label>
+      <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
+    </div>
+  </header>
+
+  <main>
+    <section class="filters" aria-label="Filter data">
+      <label>Kabupaten
+        <select id="citySelect"></select>
+      </label>
+      <label>Sampai tanggal
+        <select id="dateSelect"></select>
+      </label>
+      <label>Surveyor
+        <select id="surveyorSelect"></select>
+      </label>
+      <label>Target sampel per zona
+        <input id="thresholdInput" type="number" min="1" step="1" value="3">
+      </label>
+      <button id="resetButton" class="button ghost" type="button">Atur ulang filter</button>
+    </section>
+
+    <section id="statusLine" class="status-line" aria-live="polite"></section>
+
+    <section class="kpis" aria-label="Ringkasan progress">
+      <article class="kpi"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
+      <article class="kpi"><span>Titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Sampai tanggal terpilih</small></article>
+      <article class="kpi"><span>Progress zona</span><strong id="progressPercent">0%</strong><small id="progressHint">Berdasarkan filter aktif</small></article>
+      <article class="kpi"><span>Surveyor aktif</span><strong id="surveyorCount">0</strong><small id="surveyorHint">Pada kabupaten terpilih</small></article>
+    </section>
+
+    <section class="map-panel">
+      <div class="section-heading">
+        <div><h2>Peta zona dan titik sampel</h2><p id="mapHint">Titik sampel mengikuti filter tanggal dan surveyor.</p></div>
+        <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span></div>
+      </div>
+      <div id="map" role="application" aria-label="Peta polygon zona dan titik sampel"></div>
+      <p class="map-note">Unggah SHP titik dalam ZIP setiap hari. File zona disimpan di browser dan hanya perlu diganti jika poligonnya berubah.</p>
+    </section>
+
+    <section class="tables-grid">
+      <article class="table-panel">
+        <div class="section-heading"><div><h2>Zona tercapai per surveyor</h2><p>Zona dicatat pada tanggal pertama jumlah sampelnya mencapai target.</p></div></div>
+        <div class="table-wrap"><table id="zoneTable"></table></div>
+      </article>
+      <article class="table-panel">
+        <div class="section-heading"><div><h2>Titik sampel per surveyor</h2><p>Jumlah titik unik yang dikumpulkan per tanggal.</p></div></div>
+        <div class="table-wrap"><table id="sampleTable"></table></div>
+      </article>
+    </section>
+    <footer>Riwayat titik dan polygon zona disimpan di browser pada perangkat ini. Unggahan harian ditambahkan ke riwayat.</footer>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/shpjs@6.2.0/dist/shp.min.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
