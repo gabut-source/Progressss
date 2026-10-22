@@ -103,11 +103,24 @@ async function saveSamples(city,rows) {
 async function saveZone(city,geo) {
   if(!supabaseClient){await persistCity(city);return;}
   if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
-  const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:geo,updated_by:currentUser.id},{onConflict:'city'});
+  const {data,error}=await supabaseClient.from('city_zones')
+    .upsert({city,geojson:geo,updated_by:currentUser.id},{onConflict:'city'})
+    .select('city,updated_at').single();
   if(error)throw error;
+  if(data?.city!==city)throw new Error('Supabase tidak mengonfirmasi penyimpanan polygon untuk kabupaten ini.');
+}
+
+async function syncSpatialSamples(city){
+  if(!supabaseClient)return;
   const {error:deleteError}=await supabaseClient.from('samples').delete().eq('city',city).eq('zone_source','spatial');
   if(deleteError)throw deleteError;
   await upsertRemoteSamples(city,(rowsByCity[city]||[]).filter(row=>row.zoneSource==='spatial'));
+}
+
+function describeUploadError(error){
+  if(!error)return 'Kesalahan tidak diketahui.';
+  const parts=[error.message,error.details,error.hint,error.code?`Kode ${error.code}`:''].filter(Boolean);
+  return parts.join(' — ')||String(error);
 }
 
 const citySelect = document.getElementById('citySelect');
@@ -320,13 +333,19 @@ function zonesAtPoint(lon,lat,geo) {
   if(!geo)return [];
   return unique(zoneSpatialIndex(geo).filter(item=>lon>=item.bounds[0]&&lon<=item.bounds[2]&&lat>=item.bounds[1]&&lat<=item.bounds[3]&&pointInPolygonGeometry([lon,lat],item.feature.geometry)).map(item=>String(item.zone)));
 }
-function reassignSpatialRows(city,geo) {
+async function reassignSpatialRows(city,geo) {
   const rows=rowsByCity[city]||[]; const kept=rows.filter(r=>r.zoneSource!=='spatial');
   const spatial=rows.filter(r=>r.zoneSource==='spatial'); const points=new Map();
   for(const r of spatial)if(!points.has(`${r.date}\u0000${keyOf(r)}`))points.set(`${r.date}\u0000${keyOf(r)}`,r);
-  for(const r of points.values()){
+  const uniquePoints=[...points.values()];
+  for(let index=0;index<uniquePoints.length;index++){
+    const r=uniquePoints[index];
     const zones=zonesAtPoint(Number(r.lon),Number(r.lat),geo);
     if(!zones.length)kept.push({...r,zone:''}); else for(const zone of zones)kept.push({...r,zone});
+    if((index+1)%100===0||index===uniquePoints.length-1){
+      setLoadingStatus(`Mencocokkan titik sampel ke zona… ${Math.round((index+1)/uniquePoints.length*100)}%`);
+      await browserPaint();
+    }
   }
   rowsByCity[city]=mergeRows([],kept);
 }
@@ -522,6 +541,7 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
 });
 document.getElementById('geoInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
+  let polygonSaved=false;let city='';
   try{
     beginLoading('Membaca ZIP shapefile zona…');await browserPaint();
     let geo;
@@ -530,11 +550,17 @@ document.getElementById('geoInput').addEventListener('change',async event=>{
     if(!polygonFeatures.length)throw new Error('File tidak berisi polygon. Unggah ZIP shapefile zona yang berisi .shp, .shx, .dbf, dan .prj.');
     geo={...geo,features:polygonFeatures};
     setLoadingStatus(`Menyiapkan ${polygonFeatures.length.toLocaleString('id-ID')} polygon zona…`);await browserPaint();
-    const city=citySelect.value; geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona…');await browserPaint();reassignSpatialRows(city,geo);
-    setLoadingStatus('Menyimpan polygon ke Supabase…');await saveZone(city,geo);setLoadingStatus('Memuat polygon dan memperbarui peta…');await browserPaint();shouldFit=true; update();
+    city=citySelect.value; geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona…');await browserPaint();await reassignSpatialRows(city,geo);
+    setLoadingStatus('Menyimpan polygon ke Supabase…');await saveZone(city,geo);polygonSaved=true;
+    shouldFit=true;rebuildFilters();update();
+    setLoadingStatus('Polygon tersimpan. Menyinkronkan titik sampel…');await browserPaint();await syncSpatialSamples(city);
     statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan dan ditampilkan: ${geo.features.length.toLocaleString('id-ID')} zona.`;
   }
-  catch(error){statusLine.textContent=`Unggah zona gagal: ${error.message||error}`;alert(`Polygon tidak dapat dimuat: ${error.message||error}`);}
+  catch(error){
+    const detail=describeUploadError(error);
+    const message=polygonSaved?`Polygon ${city} sudah tersimpan dan ditampilkan, tetapi sinkronisasi titik sampel gagal: ${detail}`:`Polygon gagal disimpan ke Supabase: ${detail}`;
+    statusLine.textContent=message;alert(message);
+  }
   finally{endLoading();event.target.value='';}
 });
 
