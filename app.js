@@ -1,4 +1,4 @@
-/* WebGIS progress viewer: data are deduplicated by Nomor Identifikasi. */
+/* Progress viewer: data are deduplicated by Nomor Identifikasi. */
 const DB_NAME = 'webgis-progress-db';
 const BASE_DATA = window.APP_DATA?.cities || window.APP_DATA || {};
 let rowsByCity = Object.fromEntries(Object.entries(BASE_DATA).map(([k,v]) => [k, Array.isArray(v) ? v.slice() : (Array.isArray(v?.rows) ? v.rows.slice() : [])]));
@@ -7,6 +7,9 @@ let dbPromise;
 let markerLayer;
 let polygonLayer;
 let shouldFit = true;
+let supabaseClient = null;
+let currentUser = null;
+let legacyBrowserData = {};
 
 function getDb() {
   if (dbPromise) return dbPromise;
@@ -30,6 +33,78 @@ async function restoreStoredData() {
   } catch(error) { statusLine.textContent=`Penyimpanan browser tidak dapat dibuka: ${error.message||error}`; }
 }
 
+function configuredSupabaseClient() {
+  const config=window.SUPABASE_CONFIG||{};
+  if(!config.url||!config.publishableKey||!window.supabase?.createClient)return null;
+  return window.supabase.createClient(config.url,config.publishableKey);
+}
+
+function addCityOption(city) {
+  if(!city||[...citySelect.options].some(option=>option.value===city))return;
+  const option=document.createElement('option'); option.value=city; option.textContent=city; citySelect.append(option);
+}
+
+async function verifyAdminUser(user) {
+  if(!user)return false;
+  const {data,error}=await supabaseClient.from('webgis_admins').select('user_id').eq('user_id',user.id).maybeSingle();
+  if(error)throw error;
+  return !!data;
+}
+
+async function loadRemoteCity(city) {
+  const zoneResult=await supabaseClient.from('city_zones').select('geojson').eq('city',city).maybeSingle();
+  if(zoneResult.error)throw zoneResult.error;
+  if(zoneResult.data?.geojson)geoByCity[city]=zoneResult.data.geojson; else delete geoByCity[city];
+
+  const records=[]; let from=0; const pageSize=1000;
+  while(true){
+    const result=await supabaseClient.from('samples')
+      .select('zone,sample_number,ident,surveyor,sample_date,longitude,latitude,zone_source,properties')
+      .eq('city',city).order('sample_date',{ascending:true}).range(from,from+pageSize-1);
+    if(result.error)throw result.error;
+    records.push(...(result.data||[]));
+    if(!result.data||result.data.length<pageSize)break;
+    from+=pageSize;
+  }
+  rowsByCity[city]=records.map(row=>({zone:row.zone,sample:row.sample_number,ident:row.ident,surveyor:row.surveyor,date:row.sample_date,lon:row.longitude,lat:row.latitude,zoneSource:row.zone_source,properties:row.properties||{}}));
+}
+
+async function loadRemoteData() {
+  const {data,error}=await supabaseClient.from('city_zones').select('city');
+  if(error)throw error;
+  for(const row of data||[])addCityOption(row.city);
+  const cities=unique([...Object.keys(rowsByCity),...(data||[]).map(row=>row.city)]);
+  for(const city of cities)await loadRemoteCity(city);
+}
+
+function sampleToRecord(row,city) {
+  return {city,zone:text(row.zone),sample_number:text(row.sample),ident:text(row.ident||row.sample),surveyor:text(row.surveyor),sample_date:row.date,longitude:row.lon==null||row.lon===''?null:Number(row.lon),latitude:row.lat==null||row.lat===''?null:Number(row.lat),zone_source:row.zoneSource||'attribute',properties:row.properties||{},uploaded_by:currentUser.id};
+}
+
+async function upsertRemoteSamples(city,rows) {
+  if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
+  const records=rows.map(row=>sampleToRecord(row,city));
+  for(let start=0;start<records.length;start+=250){
+    const {error}=await supabaseClient.from('samples').upsert(records.slice(start,start+250),{onConflict:'city,sample_date,ident,zone'});
+    if(error)throw error;
+  }
+}
+
+async function saveSamples(city,rows) {
+  if(supabaseClient)return upsertRemoteSamples(city,rows);
+  await persistCity(city);
+}
+
+async function saveZone(city,geo) {
+  if(!supabaseClient){await persistCity(city);return;}
+  if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
+  const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:geo,updated_by:currentUser.id},{onConflict:'city'});
+  if(error)throw error;
+  const {error:deleteError}=await supabaseClient.from('samples').delete().eq('city',city).eq('zone_source','spatial');
+  if(deleteError)throw deleteError;
+  await upsertRemoteSamples(city,(rowsByCity[city]||[]).filter(row=>row.zoneSource==='spatial'));
+}
+
 const citySelect = document.getElementById('citySelect');
 const surveyorSelect = document.getElementById('surveyorSelect');
 const TARGET_SAMPLES_PER_ZONE = 3;
@@ -44,7 +119,7 @@ const keyOf = row => text(row.ident || row.sample || `${row.date}|${row.surveyor
 const idKey = value => text(value).replace(/\.0$/, '').toLocaleLowerCase('id-ID');
 const unique = values => [...new Set(values.filter(v => v != null && v !== ''))];
 
-for (const city of [...new Set(['Pamekasan','Sampang','Sumenep',...Object.keys(rowsByCity)])].sort()) {
+for (const city of [...new Set(['Bangkalan','Pamekasan','Sampang','Sumenep',...Object.keys(rowsByCity)])].sort()) {
   if (!rowsByCity[city]) rowsByCity[city]=[];
   const option = document.createElement('option'); option.value = city; option.textContent = city; citySelect.append(option);
 }
@@ -165,7 +240,7 @@ function mergeRows(existing,incoming) {
   const result=new Map();
   for(const r of [...existing,...incoming]){
     const k=`${r.date}\u0000${keyOf(r)}\u0000${idKey(r.zone)}`;
-    if(!result.has(k))result.set(k,r);
+    result.set(k,r);
   }
   return [...result.values()];
 }
@@ -286,7 +361,7 @@ function importSampleFeatures(geo,city) {
       const spatialZones=explicitZone==null?zonesAtPoint(lon,lat,geoByCity[city]):[];
       const zones=explicitZone!=null?[String(explicitZone)]:spatialZones;
       if(!zones.length){unassigned++;zones.push('');}
-      for(const zone of zones)imported.push({zone,sample:text(sample),ident:sampleId,surveyor:text(person),date,lon,lat,zoneSource:explicitZone==null?'spatial':'attribute'});
+      for(const zone of zones)imported.push({zone,sample:text(sample),ident:sampleId,surveyor:text(person),date,lon,lat,zoneSource:explicitZone==null?'spatial':'attribute',properties:props});
     }
   }
   return {imported,skipped,unassigned};
@@ -299,7 +374,7 @@ document.getElementById('shpInput').addEventListener('change',async event=>{
     const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
     if(!result.imported.length)throw new Error('Tidak ada feature titik dengan atribut nomor sampel, surveyor, dan tanggal. Periksa isi DBF.');
     const before=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],result.imported); const added=rowsByCity[city].length-before;
-    await persistCity(city); shouldFit=true; rebuildFilters(); update();
+    await saveSamples(city,result.imported); shouldFit=true; rebuildFilters(); update();
     statusLine.innerHTML=`SHP <strong>${escapeHtml(file.name)}</strong> ditambahkan: ${added} baris baru; ${result.skipped} feature dilewati${result.unassigned?`; ${result.unassigned} titik belum masuk zona` : ''}.`;
   }catch(error){alert(`SHP tidak dapat dimuat: ${error.message||error}`);}
   event.target.value='';
@@ -318,11 +393,11 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
     const imported=[];
     for(const row of raw){const r=normalizeHeader(row); const sample=getField(r,['Nomor Sampel','No Sampel']); const surveyor=getField(r,['Nama Surveyor','Surveyor']); const date=normalizeDate(getField(r,['Tanggal Pelaksanaan','Tanggal'])); if(sample==null||!surveyor||!date)continue;
       const x=getField(r,['X','Longitude','Lon']), y=getField(r,['Y','Latitude','Lat']);
-      imported.push({zone:text(getField(r,['NOZN','NO ZN','NO ZONA'])),sample:text(sample),ident:text(getField(r,['Nomor Identifikasi','ID Sampel']))||text(sample),surveyor:text(surveyor),date,lon:x==null||x===''?null:Number(x),lat:y==null||y===''?null:Number(y)});
+      imported.push({zone:text(getField(r,['NOZN','NO ZN','NO ZONA'])),sample:text(sample),ident:text(getField(r,['Nomor Identifikasi','ID Sampel']))||text(sample),surveyor:text(surveyor),date,lon:x==null||x===''?null:Number(x),lat:y==null||y===''?null:Number(y),zoneSource:'attribute',properties:row});
     }
     if(!imported.length)throw new Error('Tidak ada baris sampel dengan tanggal dan surveyor yang valid.');
     const city=citySelect.value; const beforeCount=(rowsByCity[city]||[]).length; rowsByCity[city]=mergeRows(rowsByCity[city]||[],imported); const addedCount=rowsByCity[city].length-beforeCount;
-    await persistCity(city);
+    await saveSamples(city,imported);
     shouldFit=true; rebuildFilters(); update(); statusLine.innerHTML=`Excel untuk <strong>${escapeHtml(city)}</strong> ditambahkan: ${addedCount.toLocaleString('id-ID')} baris baru.`;
   }catch(error){alert(error.message||String(error));}
   event.target.value='';
@@ -332,40 +407,70 @@ document.getElementById('geoInput').addEventListener('change',async event=>{
   try{
     let geo;
     if(file.name.toLowerCase().endsWith('.zip'))geo=await readShapefile(file); else geo=featureCollection(JSON.parse(await file.text()));
-    const city=citySelect.value; geoByCity[city]=geo; reassignSpatialRows(city,geo); await persistCity(city); shouldFit=true; update();
+    const city=citySelect.value; geoByCity[city]=geo; reassignSpatialRows(city,geo); await saveZone(city,geo); shouldFit=true; update();
     statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan: ${geo.features.length.toLocaleString('id-ID')} feature.`;
   }
   catch(error){alert(`Polygon tidak dapat dimuat: ${error.message||error}`);}
   event.target.value='';
 });
 
-document.getElementById('publishButton').addEventListener('click',()=>{
-  const cities={};
-  for(const city of Object.keys(rowsByCity)){
-    const rows=rowsByCity[city]||[]; const geo=geoByCity[city]||null;
-    if(rows.length||geo)cities[city]={rows,geo};
-  }
-  const contents=`/* Data bersama WebGIS. Diperbarui oleh admin. */\nwindow.APP_DATA = ${JSON.stringify({cities})};\n`;
-  const blob=new Blob([contents],{type:'text/javascript;charset=utf-8'}); const url=URL.createObjectURL(blob);
-  const link=document.createElement('a'); link.href=url; link.download='data.js'; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-  statusLine.textContent='Berkas data.js berhasil disiapkan. Ganti data.js di repository GitHub dengan berkas ini, lalu push agar semua pengguna menerima pembaruan.';
-});
-
 const adminPanel=document.getElementById('adminPanel');
 const adminLogin=document.getElementById('adminLogin');
 const adminTools=document.getElementById('adminTools');
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
-adminLogin.addEventListener('submit',event=>{
+adminLogin.addEventListener('submit',async event=>{
   event.preventDefault();
-  const username=document.getElementById('adminUsername').value.trim();
+  const email=document.getElementById('adminEmail').value.trim();
   const password=document.getElementById('adminPassword').value;
   const message=document.getElementById('adminMessage');
-  if(username==='tenn'&&password==='welcome'){
-    adminLogin.hidden=true; adminTools.hidden=false; message.textContent=''; document.getElementById('adminPassword').value='';
+  if(!supabaseClient){message.textContent='Supabase belum dikonfigurasi. Isi URL dan publishable key di supabase-config.js.';return;}
+  message.textContent='Memeriksa akun…';
+  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){message.textContent='Login gagal. Periksa email dan password.';return;}
+  try{
+    if(!await verifyAdminUser(data.user)){
+      await supabaseClient.auth.signOut(); message.textContent='Akun ini belum diberi akses admin.';return;
+    }
+    currentUser=data.user; adminLogin.hidden=true; adminTools.hidden=false; message.textContent=''; document.getElementById('adminPassword').value='';
     document.getElementById('adminCityName').textContent=citySelect.value;
-  }else message.textContent='Username atau password salah.';
+  }catch(error){await supabaseClient.auth.signOut();message.textContent=`Akses admin belum siap: ${error.message||error}`;}
 });
-document.getElementById('adminLogout').addEventListener('click',()=>{adminTools.hidden=true;adminLogin.hidden=false;adminLogin.reset();});
+document.getElementById('adminLogout').addEventListener('click',async()=>{if(supabaseClient)await supabaseClient.auth.signOut();currentUser=null;adminTools.hidden=true;adminLogin.hidden=false;adminLogin.reset();});
+document.getElementById('migrateLocalButton').addEventListener('click',async()=>{
+  if(!currentUser){alert('Login sebagai admin terlebih dahulu.');return;}
+  const button=document.getElementById('migrateLocalButton'); button.disabled=true; statusLine.textContent='Mengimpor data lama dari browser ke database…';
+  try{
+    for(const [city,legacy] of Object.entries(legacyBrowserData)){
+      if(legacy.geo){const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:legacy.geo,updated_by:currentUser.id},{onConflict:'city'});if(error)throw error;}
+      if(legacy.rows?.length)await upsertRemoteSamples(city,legacy.rows);
+    }
+    legacyBrowserData={}; button.hidden=true; await loadRemoteData(); rebuildFilters(); update();
+    statusLine.textContent='Data lama dari browser berhasil diimpor ke database bersama.';
+  }catch(error){statusLine.textContent=`Impor data lama gagal: ${error.message||error}`;}
+  finally{button.disabled=false;}
+});
 
-async function init() { await restoreStoredData(); rebuildFilters(); update(); }
+async function init() {
+  supabaseClient=configuredSupabaseClient();
+  if(supabaseClient){
+    try{
+      await restoreStoredData();
+      legacyBrowserData=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(rowsByCity).map(([city,rows])=>[city,{rows,geo:geoByCity[city]||null}]))));
+      document.getElementById('migrateLocalButton').hidden=!Object.values(legacyBrowserData).some(item=>item.rows.length||item.geo);
+      const {data,error}=await supabaseClient.auth.getSession(); if(error)throw error;
+      if(data.session){
+        const user=data.session.user;
+        if(await verifyAdminUser(user)){currentUser=user;adminLogin.hidden=true;adminTools.hidden=false;}
+        else await supabaseClient.auth.signOut();
+      }
+      await loadRemoteData();
+      statusLine.textContent='Terhubung ke database bersama. Data akan diperbarui untuk semua pengguna setelah unggahan admin berhasil.';
+    }catch(error){statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa setup Supabase.`;}
+  }else{
+    await restoreStoredData();
+    statusLine.textContent='Supabase belum dikonfigurasi. Data belum tersinkron antar pengguna.';
+    document.getElementById('adminMessage').textContent='Supabase belum dikonfigurasi. Isi URL dan publishable key terlebih dahulu.';
+  }
+  rebuildFilters(); update();
+}
 init();
