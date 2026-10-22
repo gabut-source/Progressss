@@ -6,6 +6,9 @@ let geoByCity = Object.fromEntries(Object.entries(BASE_DATA).filter(([,v]) => v 
 let dbPromise;
 let markerLayer;
 let polygonLayer;
+let zoneLayersById = new Map();
+let selectedZoneId = '';
+let currentCalculation = null;
 let shouldFit = true;
 let supabaseClient = null;
 let currentUser = null;
@@ -193,6 +196,49 @@ function renderTable(id, title, dates, people, valueAt) {
   table.append(tbody);
 }
 
+function renderZoneSampleList(geo, calculation) {
+  const table=document.getElementById('zoneSampleTable');
+  const hint=document.getElementById('zoneListHint');
+  table.replaceChildren();
+  const thead=document.createElement('thead');
+  const headRow=document.createElement('tr');
+  for(const label of ['Zona (NOZN)','Jumlah sampel','Status']){const th=document.createElement('th');th.textContent=label;headRow.append(th);}
+  thead.append(headRow);table.append(thead);
+  const tbody=document.createElement('tbody');
+  const features=(geo?.features||[]).filter(feature=>featureZone(feature)!=null);
+  const zones=new Map();
+  for(const feature of features){const value=String(featureZone(feature));const id=idKey(value);if(!zones.has(id))zones.set(id,value);}
+  const ordered=[...zones.entries()].sort((a,b)=>a[1].localeCompare(b[1],'id',{numeric:true,sensitivity:'base'}));
+  hint.textContent=`${ordered.length.toLocaleString('id-ID')} zona • Target 3 sampel per zona • Klik baris untuk zoom ke peta.`;
+  for(const [id,value] of ordered){
+    const count=calculation.zoneSampleCounts.get(id)||0;
+    const done=count>=TARGET_SAMPLES_PER_ZONE;
+    const row=document.createElement('tr');
+    const zoneCell=document.createElement('td');
+    const button=document.createElement('button');button.type='button';button.className='zone-link';button.dataset.zoneId=id;button.textContent=`Zona ${value}`;button.setAttribute('aria-label',`Zoom ke zona ${value}, ${count} sampel`);zoneCell.append(button);
+    const countCell=document.createElement('td');countCell.textContent=count.toLocaleString('id-ID');
+    const statusCell=document.createElement('td');statusCell.textContent=done?'Tercapai':'Belum tercapai';statusCell.className=done?'zone-done':'zone-pending';
+    row.append(zoneCell,countCell,statusCell);tbody.append(row);
+  }
+  if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=3;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
+  table.append(tbody);
+}
+
+function zoomToZone(id) {
+  const layers=zoneLayersById.get(id)||[];
+  if(!layers.length)return;
+  selectedZoneId=id;
+  const bounds=layers.map(layer=>layer.getBounds()).filter(bound=>bound?.isValid());
+  if(!bounds.length)return;
+  let combined=bounds[0];for(const bound of bounds.slice(1))combined=combined.extend(bound);
+  map.fitBounds(combined.pad(.12),{maxZoom:16});
+  layers[0].openPopup();
+  polygonLayer?.setStyle(feature=>{
+    const zone=featureZone(feature);const key=zone==null?'':idKey(zone);const done=zone!=null&&currentCalculation?.completed.has(key);
+    return {color:key===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:key===selectedZoneId?3:1.4,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:.27};
+  });
+}
+
 function featureZone(feature) {
   const p=feature.properties||{};
   return propertyValue(p,['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA']);
@@ -247,6 +293,8 @@ function mergeRows(existing,incoming) {
 
 function renderMap(rows, calculation) {
   if (!mapAvailable) { document.getElementById('mapHint').textContent='Peta perlu koneksi internet untuk memuat pustaka peta.'; return; }
+  currentCalculation=calculation;
+  zoneLayersById=new Map();
   markerLayer.clearLayers();
   const seen=new Set();
   for (const r of dedupPoints(rows)) {
@@ -267,13 +315,14 @@ function renderMap(rows, calculation) {
         return !area || String(area).toLowerCase().includes(citySelect.value.toLowerCase());
       },
       style: feature => {
-        const z=featureZone(feature); const done=z!=null&&calculation.completed.has(idKey(z));
-        return {color:done?'#167d73':'#cf9f32',weight:1.4,fillColor:done?'#2a9d8f':'#e9c46a',fillOpacity:.27};
+        const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
+        return {color:id===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:id===selectedZoneId?3:1.4,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:.27};
       },
       onEachFeature: (feature,layer) => {
         polygonCount++;
-        const z=featureZone(feature); const done=z!=null&&calculation.completed.has(idKey(z));
-        const n=z==null?0:(calculation.zoneSampleCounts.get(idKey(z))||0);
+        const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
+        const n=z==null?0:(calculation.zoneSampleCounts.get(id)||0);
+        if(id){if(!zoneLayersById.has(id))zoneLayersById.set(id,[]);zoneLayersById.get(id).push(layer);}
         layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}`);
       }
     }).addTo(map);
@@ -316,6 +365,7 @@ function update() {
   const sampleCounts=new Map();
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
+  renderZoneSampleList(geo,calc);
   renderMap(filtered,calc);
   const geoNote=geoByCity[city]?'Polygon dimuat.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
   statusLine.innerHTML=`Data <strong>${escapeHtml(city)}</strong>: ${source.length.toLocaleString('id-ID')} baris valid • ${geoNote}`;
@@ -417,6 +467,10 @@ document.getElementById('geoInput').addEventListener('change',async event=>{
 const adminPanel=document.getElementById('adminPanel');
 const adminLogin=document.getElementById('adminLogin');
 const adminTools=document.getElementById('adminTools');
+document.getElementById('zoneSampleTable').addEventListener('click',event=>{
+  const button=event.target.closest('button[data-zone-id]');
+  if(button)zoomToZone(button.dataset.zoneId);
+});
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
 adminLogin.addEventListener('submit',async event=>{
   event.preventDefault();
