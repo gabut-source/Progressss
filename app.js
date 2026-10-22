@@ -413,13 +413,26 @@ function reportTableData(tableId){
     return Number(cell.textContent)||0;
   }));
 }
+function zoneSampleReportData(){
+  return [...document.querySelectorAll('#zoneSampleTable tr')].map((row,rowIndex)=>[...row.cells].map((cell,columnIndex)=>{
+    const sortButton=cell.querySelector('button[data-zone-sort]');
+    if(sortButton)return sortButton.textContent.replace(/[↑↓↕]/g,'').trim();
+    const zoneButton=cell.querySelector('button[data-zone-id]');
+    if(zoneButton)return zoneButton.textContent.replace(/^Zona\s+/,'');
+    if(rowIndex>0&&columnIndex===1)return Number(cell.textContent)||0;
+    return cell.textContent;
+  }));
+}
 function downloadAchievementWorkbook(){
   if(!window.XLSX){alert('Pustaka Excel belum termuat. Muat ulang halaman lalu coba lagi.');return;}
   const workbook=XLSX.utils.book_new();
+  const zoneSampleSheet=XLSX.utils.aoa_to_sheet(zoneSampleReportData());
   const zoneSheet=XLSX.utils.aoa_to_sheet(reportTableData('zoneTable'));
   const sampleSheet=XLSX.utils.aoa_to_sheet(reportTableData('sampleTable'));
+  zoneSampleSheet['!cols']=[{wch:20},{wch:18},{wch:20},{wch:16}];
   zoneSheet['!cols']=[{wch:24},...Array(Math.max(0,(zoneSheet['!ref']?XLSX.utils.decode_range(zoneSheet['!ref']).e.c:0))).fill({wch:14})];
   sampleSheet['!cols']=[{wch:24},...Array(Math.max(0,(sampleSheet['!ref']?XLSX.utils.decode_range(sampleSheet['!ref']).e.c:0))).fill({wch:14})];
+  XLSX.utils.book_append_sheet(workbook,zoneSampleSheet,'Jumlah Sampel Zona');
   XLSX.utils.book_append_sheet(workbook,zoneSheet,'Zona Tercapai');
   XLSX.utils.book_append_sheet(workbook,sampleSheet,'Sampel Tercapai');
   const date=new Date().toISOString().slice(0,10);
