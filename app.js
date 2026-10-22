@@ -91,11 +91,24 @@ async function loadRemoteData() {
   for(const row of data||[])addCityOption(row.city);
   try{
     const savedCity=localStorage.getItem('progress-selected-city');
-    if(savedCity&&[...citySelect.options].some(option=>option.value===savedCity))citySelect.value=savedCity;
+    if(savedCity&&savedCity!=='ALL'&&[...citySelect.options].some(option=>option.value===savedCity))citySelect.value=savedCity;
   }catch{}
-  // Do not download every large district polygon on each page load. Load only
-  // the selected district; the selector loads another district on demand.
-  await loadRemoteCity(citySelect.value);
+  // Keep regular page loads light. ALL loads the districts incrementally only
+  // when the user explicitly selects the overview.
+  if(citySelect.value==='ALL')await loadAllRemoteCities();
+  else await loadRemoteCity(citySelect.value);
+}
+
+function districtNames(){return [...citySelect.options].map(option=>option.value).filter(city=>city&&city!=='ALL');}
+async function loadAllRemoteCities(requestId=null){
+  const cities=districtNames();
+  for(let index=0;index<cities.length;index++){
+    if(requestId!=null&&requestId!==citySelectionRequest)return;
+    const city=cities[index];
+    if(remoteCitiesLoaded.has(city))continue;
+    setLoadingStatus(`Memuat ${city} (${index+1}/${cities.length}) untuk tampilan ALL…`);
+    await loadRemoteCity(city);
+  }
 }
 
 function sampleToRecord(row,city) {
@@ -203,11 +216,12 @@ for (const city of [...new Set(['Bangkalan','Pamekasan','Sampang','Sumenep',...O
   if (!rowsByCity[city]) rowsByCity[city]=[];
   const option = document.createElement('option'); option.value = city; option.textContent = city; citySelect.append(option);
 }
+const allCityOption=document.createElement('option');allCityOption.value='ALL';allCityOption.textContent='ALL';citySelect.append(allCityOption);
 
 const mapAvailable = typeof L !== 'undefined';
 let map;
 if (mapAvailable) {
-  map = L.map('map', { zoomControl: true }).setView([-7.05,113.7], 9);
+  map = L.map('map', { zoomControl: true, preferCanvas:true }).setView([-7.05,113.7], 9);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
@@ -215,7 +229,18 @@ if (mapAvailable) {
   markerLayer.addTo(map);
 }
 
-function currentRows() { return rowsByCity[citySelect.value] || []; }
+function currentRows() {
+  if(citySelect.value!=='ALL')return rowsByCity[citySelect.value]||[];
+  return districtNames().flatMap(city=>(rowsByCity[city]||[]).map(row=>({...row,_city:city,zone:row.zone?`${city} • ${row.zone}`:row.zone})));
+}
+function combinedDistrictGeo(){
+  const features=[];
+  for(const city of districtNames())for(const feature of geoByCity[city]?.features||[]){
+    const zone=featureZone(feature);
+    features.push({...feature,properties:{...(feature.properties||{}),_progress_zone:zone==null?null:`${city} • ${zone}`}});
+  }
+  return {type:'FeatureCollection',features};
+}
 function allDates(rows) { return unique(rows.map(r => r.date)).sort(); }
 function rebuildFilters() {
   const rows = currentRows();
@@ -227,7 +252,7 @@ function rebuildFilters() {
 
 function dedupPoints(rows) {
   const seen=new Map();
-  for (const r of rows) if (!seen.has(keyOf(r))) seen.set(keyOf(r),r);
+  for (const r of rows) {const key=r._city?`${r._city}\u0000${keyOf(r)}`:keyOf(r);if (!seen.has(key)) seen.set(key,r);}
   return [...seen.values()];
 }
 
@@ -338,6 +363,7 @@ function zoomToZone(id) {
 
 function featureZone(feature) {
   const p=feature.properties||{};
+  if(p._progress_zone!=null&&p._progress_zone!=='')return p._progress_zone;
   return propertyValue(p,['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA']);
 }
 
@@ -410,7 +436,7 @@ function mergeRows(existing,incoming) {
   return [...result.values()];
 }
 
-function renderMap(rows, calculation) {
+function renderMap(rows, calculation, geoOverride) {
   if (!mapAvailable) { document.getElementById('mapHint').textContent='Peta perlu koneksi internet untuk memuat pustaka peta.'; return; }
   currentCalculation=calculation;
   zoneLayersById=new Map();
@@ -419,7 +445,7 @@ function renderMap(rows, calculation) {
   for (const r of dedupPoints(rows)) {
     if (r.lon==null||r.lat==null||r.lon===''||r.lat==='') continue;
     const lon=Number(r.lon), lat=Number(r.lat); if (!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lon)>180||Math.abs(lat)>90) continue;
-    const sampleKey=keyOf(r); if (seen.has(sampleKey)) continue; seen.add(sampleKey);
+    const sampleKey=r._city?`${r._city}\u0000${keyOf(r)}`:keyOf(r); if (seen.has(sampleKey)) continue; seen.add(sampleKey);
     const marker=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:1.5,fillColor:'#e76f51',fillOpacity:.95});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
     const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','LAND_VALUE']);
@@ -428,10 +454,10 @@ function renderMap(rows, calculation) {
     markerLayer.addLayer(marker);
   }
   if (polygonLayer) { map.removeLayer(polygonLayer); polygonLayer=null; }
-  const geo=geoByCity[citySelect.value];
+  const geo=geoOverride===undefined?geoByCity[citySelect.value]:geoOverride;
   let polygonCount=0;
   if (geo) {
-    polygonLayer=L.geoJSON(geo,{
+    polygonLayer=L.geoJSON(geo,{smoothFactor:2,
       filter: feature => ['Polygon','MultiPolygon'].includes(feature.geometry?.type),
       style: feature => {
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
@@ -492,11 +518,11 @@ function downloadAchievementWorkbook(){
 }
 
 function update() {
-  const city=citySelect.value; const selectedPerson=surveyorSelect.value;
+  const city=citySelect.value; const isAll=city==='ALL'; const selectedPerson=surveyorSelect.value;
   const threshold=TARGET_SAMPLES_PER_ZONE;
   const source=currentRows();
   const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
-  const geo=geoByCity[city];
+  const geo=isAll?combinedDistrictGeo():geoByCity[city];
   // Dashboard zone totals must come from uploaded polygons, not sample rows.
   const knownZones=new Set(geo?unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
   const calc=calculate(filtered,threshold,knownZones); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
@@ -518,8 +544,8 @@ function update() {
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
   renderZoneSampleList(geo,calc);
-  renderMap(filtered,calc);
-  const geoNote=geoByCity[city]?'Polygon dimuat.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
+  renderMap(filtered,calc,geo);
+  const geoNote=isAll?`${districtNames().length} kabupaten dalam tampilan gabungan.`:geoByCity[city]?'Polygon dimuat.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
   statusLine.innerHTML=`Data <strong>${escapeHtml(city)}</strong>: ${source.length.toLocaleString('id-ID')} baris valid • ${geoNote}`;
 }
 
@@ -571,6 +597,7 @@ function importSampleFeatures(geo,city) {
 
 document.getElementById('shpInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
+  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
   try{
     beginLoading('Membaca ZIP shapefile titik…');await browserPaint();
     const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
@@ -585,9 +612,14 @@ document.getElementById('shpInput').addEventListener('change',async event=>{
 citySelect.addEventListener('change',async()=>{
   const city=citySelect.value;const request=++citySelectionRequest;shouldFit=true;
   let loadError='';
+  selectedZoneId='';
   document.getElementById('adminCityName').textContent=city;
-  try{localStorage.setItem('progress-selected-city',city);}catch{}
-  if(supabaseClient&&!remoteCitiesLoaded.has(city)){
+  if(city!=='ALL')try{localStorage.setItem('progress-selected-city',city);}catch{}
+  if(supabaseClient&&city==='ALL'){
+    beginLoading('Menyiapkan tampilan gabungan…');
+    try{await loadAllRemoteCities(request);}catch(error){loadError=`Tampilan ALL belum lengkap: ${error.message||error}`;}
+    finally{if(request===citySelectionRequest)endLoading();}
+  }else if(supabaseClient&&!remoteCitiesLoaded.has(city)){
     beginLoading(`Memuat polygon dan sampel ${city}…`);
     try{await loadRemoteCity(city);}catch(error){loadError=`Data ${city} belum dapat dimuat: ${error.message||error}`;}
     finally{if(request===citySelectionRequest)endLoading();}
@@ -599,6 +631,7 @@ citySelect.addEventListener('change',async()=>{
 surveyorSelect.addEventListener('change',update);
 document.getElementById('excelInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
+  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
   try {
     beginLoading('Membaca file Excel…');await browserPaint();
     if(!window.XLSX)throw new Error('Pustaka Excel tidak termuat. Periksa koneksi internet lalu muat ulang halaman.');
@@ -620,6 +653,7 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
 });
 document.getElementById('geoInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
+  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah zona.');event.target.value='';return;}
   let polygonSaved=false;let city='';
   try{
     beginLoading('Membaca ZIP shapefile zona…');await browserPaint();
@@ -652,7 +686,7 @@ document.getElementById('zoneSampleTable').addEventListener('click',event=>{
     const key=sortButton.dataset.zoneSort;
     if(zoneListSort.key===key)zoneListSort.direction=zoneListSort.direction==='asc'?'desc':'asc';
     else zoneListSort={key,direction:'asc'};
-    renderZoneSampleList(geoByCity[citySelect.value],currentCalculation);return;
+    renderZoneSampleList(citySelect.value==='ALL'?combinedDistrictGeo():geoByCity[citySelect.value],currentCalculation);return;
   }
   const button=event.target.closest('button[data-zone-id]');
   if(button)zoomToZone(button.dataset.zoneId);
