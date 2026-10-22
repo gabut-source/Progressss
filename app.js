@@ -134,6 +134,7 @@ async function syncSpatialSamples(city){
 
 function describeUploadError(error){
   if(!error)return 'Kesalahan tidak diketahui.';
+  if(error.code==='NoSuchBucket'||/bucket not found/i.test(error.message||''))return 'Bucket zone-geojson belum dibuat di Supabase. Jalankan file supabase/storage-migration.sql sekali di SQL Editor Supabase, lalu unggah ulang polygon.';
   const parts=[error.message,error.details,error.hint,error.code?`Kode ${error.code}`:''].filter(Boolean);
   return parts.join(' — ')||String(error);
 }
@@ -223,7 +224,7 @@ function calculate(rows, threshold, knownZones=null) {
       }
     }
   }
-  return {completed, awards, zoneSampleCounts, individualZones, zoneCount:knownZones?.size || byZone.size};
+  return {completed, awards, zoneSampleCounts, individualZones, zoneCount:knownZones ? knownZones.size : byZone.size};
 }
 
 function renderTable(id, title, dates, people, valueAt) {
@@ -460,13 +461,14 @@ function update() {
   const source=currentRows();
   const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
   const geo=geoByCity[city];
-  const knownZones=geo?new Set(unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey))):null;
+  // Dashboard zone totals must come from uploaded polygons, not sample rows.
+  const knownZones=new Set(geo?unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
   const calc=calculate(filtered,threshold,knownZones); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
   const dates=allDates(filtered);
   document.getElementById('zonesTotal').textContent=calc.zoneCount.toLocaleString('id-ID');
   document.getElementById('zonesDone').textContent=calc.completed.size.toLocaleString('id-ID');
   document.getElementById('zonesLeft').textContent=Math.max(0,calc.zoneCount-calc.completed.size).toLocaleString('id-ID');
-  document.getElementById('zonesRatio').textContent=`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
+  document.getElementById('zonesRatio').textContent=geo?`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`:'Polygon belum dimuat';
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent='Semua tanggal';
   const pct=calc.zoneCount?Math.round(calc.completed.size/calc.zoneCount*100):0;
