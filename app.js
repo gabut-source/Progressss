@@ -31,9 +31,8 @@ async function restoreStoredData() {
 }
 
 const citySelect = document.getElementById('citySelect');
-const dateSelect = document.getElementById('dateSelect');
 const surveyorSelect = document.getElementById('surveyorSelect');
-const thresholdInput = document.getElementById('thresholdInput');
+const TARGET_SAMPLES_PER_ZONE = 3;
 const statusLine = document.getElementById('statusLine');
 const fmtDate = value => {
   if (!value) return '';
@@ -63,12 +62,8 @@ if (mapAvailable) {
 
 function currentRows() { return rowsByCity[citySelect.value] || []; }
 function allDates(rows) { return unique(rows.map(r => r.date)).sort(); }
-function rebuildFilters(keepDate=false) {
-  const rows = currentRows(); const oldDate = keepDate ? dateSelect.value : '';
-  const dates = allDates(rows); dateSelect.replaceChildren();
-  const all = document.createElement('option'); all.value = ''; all.textContent = 'Semua tanggal'; dateSelect.append(all);
-  for (const d of dates) { const o=document.createElement('option'); o.value=d; o.textContent=fmtDate(d); dateSelect.append(o); }
-  dateSelect.value = oldDate && dates.includes(oldDate) ? oldDate : (dates.at(-1) || '');
+function rebuildFilters() {
+  const rows = currentRows();
   const oldPerson = surveyorSelect.value; surveyorSelect.replaceChildren();
   const everybody=document.createElement('option'); everybody.value=''; everybody.textContent='Semua surveyor'; surveyorSelect.append(everybody);
   for (const person of unique(rows.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'))) { const o=document.createElement('option'); o.value=person; o.textContent=person; surveyorSelect.append(o); }
@@ -222,10 +217,10 @@ function renderMap(rows, calculation) {
 function escapeHtml(value) { return String(value==null?'':value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
 function update() {
-  const city=citySelect.value; const cutoff=dateSelect.value; const selectedPerson=surveyorSelect.value;
-  const threshold=Math.max(1,Number.parseInt(thresholdInput.value,10)||3);
+  const city=citySelect.value; const selectedPerson=surveyorSelect.value;
+  const threshold=TARGET_SAMPLES_PER_ZONE;
   const source=currentRows();
-  const filtered=source.filter(r=>(!cutoff||r.date<=cutoff)&&(!selectedPerson||r.surveyor===selectedPerson));
+  const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
   const geo=geoByCity[city];
   const knownZones=geo?new Set(unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey))):null;
   const calc=calculate(filtered,threshold,knownZones); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
@@ -235,12 +230,12 @@ function update() {
   document.getElementById('zonesLeft').textContent=Math.max(0,calc.zoneCount-calc.completed.size).toLocaleString('id-ID');
   document.getElementById('zonesRatio').textContent=`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
-  document.getElementById('samplePeriod').textContent=cutoff?`Sampai ${fmtDate(cutoff)}`:'Semua tanggal';
+  document.getElementById('samplePeriod').textContent='Semua tanggal';
   const pct=calc.zoneCount?Math.round(calc.completed.size/calc.zoneCount*100):0;
   document.getElementById('progressPercent').textContent=`${pct}%`;
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
   document.getElementById('surveyorHint').textContent=selectedPerson||'Pada kabupaten terpilih';
-  document.getElementById('progressHint').textContent=`Target ${threshold} sampel per zona`;
+  document.getElementById('progressHint').textContent=`Target tetap ${threshold} sampel per zona`;
   const displayedZonePeople=calc.awards.size && [...calc.awards.keys()].some(k=>k.endsWith('\u0000Kolaborasi')) ? unique([...people,'Kolaborasi']) : people;
   renderTable('zoneTable','zona',dates,displayedZonePeople,(d,p)=>calc.awards.get(`${d}\u0000${p}`));
   const sampleCounts=new Map();
@@ -310,9 +305,8 @@ document.getElementById('shpInput').addEventListener('change',async event=>{
   event.target.value='';
 });
 
-citySelect.addEventListener('change',()=>{shouldFit=true;rebuildFilters();update();});
-dateSelect.addEventListener('change',update); surveyorSelect.addEventListener('change',update); thresholdInput.addEventListener('input',update);
-document.getElementById('resetButton').addEventListener('click',()=>{surveyorSelect.value='';thresholdInput.value=3;dateSelect.value=allDates(currentRows()).at(-1)||'';update();});
+citySelect.addEventListener('change',()=>{shouldFit=true;rebuildFilters();document.getElementById('adminCityName').textContent=citySelect.value;update();});
+surveyorSelect.addEventListener('change',update);
 document.getElementById('excelInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
   try {
@@ -356,6 +350,22 @@ document.getElementById('publishButton').addEventListener('click',()=>{
   const link=document.createElement('a'); link.href=url; link.download='data.js'; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
   statusLine.textContent='Berkas data.js berhasil disiapkan. Ganti data.js di repository GitHub dengan berkas ini, lalu push agar semua pengguna menerima pembaruan.';
 });
+
+const adminPanel=document.getElementById('adminPanel');
+const adminLogin=document.getElementById('adminLogin');
+const adminTools=document.getElementById('adminTools');
+document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
+adminLogin.addEventListener('submit',event=>{
+  event.preventDefault();
+  const username=document.getElementById('adminUsername').value.trim();
+  const password=document.getElementById('adminPassword').value;
+  const message=document.getElementById('adminMessage');
+  if(username==='tenn'&&password==='welcome'){
+    adminLogin.hidden=true; adminTools.hidden=false; message.textContent=''; document.getElementById('adminPassword').value='';
+    document.getElementById('adminCityName').textContent=citySelect.value;
+  }else message.textContent='Username atau password salah.';
+});
+document.getElementById('adminLogout').addEventListener('click',()=>{adminTools.hidden=true;adminLogin.hidden=false;adminLogin.reset();});
 
 async function init() { await restoreStoredData(); rebuildFilters(); update(); }
 init();

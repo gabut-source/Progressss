@@ -13,6 +13,8 @@ GitHub Pages tidak menyediakan server untuk menyimpan unggahan. Data hasil ungga
 
 **Penting:** Repository dan situs GitHub Pages yang publik dapat diakses siapa pun. `data.js` publikasi berisi atribut sampel dan geometri yang diunggah. Jangan publikasikan data lapangan yang bersifat rahasia.
 
+Login Admin statis di frontend hanya menyembunyikan form dari pengunjung biasa. Username dan password dapat ditemukan di kode situs; jangan menganggapnya sebagai perlindungan akses.
+
 ## Deploy ke GitHub Pages
 
 1. Unggah file aplikasi ke root branch `main`.
@@ -22,6 +24,9 @@ GitHub Pages tidak menyediakan server untuk menyimpan unggahan. Data hasil ungga
 ## Pemakaian
 
 - Pilih kabupaten.
+- Untuk mengunggah data, buka **Admin** dan masuk dengan username `tenn` serta password `welcome`.
+- Di panel Admin, unggah polygon zona dan SHP titik sampel untuk kabupaten yang sedang dipilih.
+- Target sampel per zona tetap 3. Rekap menampilkan semua tanggal; filter tanggal dan input target tidak tersedia.
 - Muat polygon sekali dalam format ZIP shapefile atau GeoJSON. Properti kode zona sebaiknya `NOZN`. ZIP shapefile perlu berisi `.shp`, `.shx`, `.dbf`, dan `.prj` dengan nama dasar yang sama.
 - Setiap hari, pilih **Tambah SHP sampel** dan unggah ZIP shapefile titik. Atribut perlu memuat nomor sampel, nama surveyor, dan tanggal pelaksanaan. Nomor zona opsional; tanpa kode zona, titik dipasangkan secara spasial ke polygon.
 - Unggahan titik ditambahkan ke riwayat; kombinasi tanggal, ID sampel, dan zona yang sama tidak diduplikasi.
