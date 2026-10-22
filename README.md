@@ -6,16 +6,17 @@ Aplikasi Progress di-host di GitHub Pages dengan data bersama di Supabase. Admin
 
 1. Buat project Supabase.
 2. Buka **SQL Editor**, jalankan isi `supabase/setup.sql`.
-3. Di **Authentication → Users**, buat user admin dengan email dan password.
-4. Salin UUID user tersebut, lalu jalankan SQL berikut dengan UUID yang benar:
+3. Jalankan juga `supabase/storage-migration.sql` untuk membuat bucket polygon dan aturan akses upload.
+4. Di **Authentication → Users**, buat user admin dengan email dan password.
+5. Salin UUID user tersebut, lalu jalankan SQL berikut dengan UUID yang benar:
 
    ```sql
    insert into public.webgis_admins (user_id)
    values ('UUID-USER-ADMIN');
    ```
 
-5. Buka `supabase-config.js`. Isi `url` dan `publishableKey` dari **Project Settings → API Keys**. Publishable/anon key boleh digunakan di browser jika kebijakan RLS dari `setup.sql` tetap aktif. Jangan pernah masukkan `service_role` atau secret key ke file frontend.
-6. Commit dan push file aplikasi serta `supabase-config.js` ke GitHub. GitHub Pages akan tetap menjadi hosting situs.
+6. Buka `supabase-config.js`. Isi `url` dan `publishableKey` dari **Project Settings → API Keys**. Publishable/anon key boleh digunakan di browser jika kebijakan RLS tetap aktif. Jangan pernah masukkan `service_role` atau secret key ke file frontend.
+7. Commit dan push file aplikasi serta `supabase-config.js` ke GitHub. GitHub Pages akan tetap menjadi hosting situs.
 
 ## Penggunaan
 
@@ -38,5 +39,5 @@ Pengunjung dapat membaca polygon dan titik sampel agar peta publik berfungsi. Ha
 
 - `index.html`, `app.js`, `style.css` — aplikasi Progress.
 - `supabase-config.js` — URL dan publishable key Supabase untuk frontend.
-- `supabase/setup.sql` — tabel, indeks, grants, serta kebijakan akses database.
+- `supabase/setup.sql`, `supabase/storage-migration.sql` — tabel, indeks, kebijakan akses, dan bucket polygon.
 - `data.js` — data fallback kosong; dataset aktif dibaca dari Supabase jika konfigurasi tersedia.

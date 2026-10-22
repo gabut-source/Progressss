@@ -59,7 +59,15 @@ async function verifyAdminUser(user) {
 async function loadRemoteCity(city) {
   const zoneResult=await supabaseClient.from('city_zones').select('geojson').eq('city',city).maybeSingle();
   if(zoneResult.error)throw zoneResult.error;
-  if(zoneResult.data?.geojson)geoByCity[city]=zoneResult.data.geojson; else delete geoByCity[city];
+  if(zoneResult.data?.geojson){
+    const saved=zoneResult.data.geojson;
+    if(saved._storage_path){
+      const {data}=supabaseClient.storage.from('zone-geojson').getPublicUrl(saved._storage_path);
+      const response=await fetch(data.publicUrl,{cache:'no-store'});
+      if(!response.ok)throw new Error(`File polygon tidak dapat diunduh dari Supabase Storage (${response.status}).`);
+      geoByCity[city]=await response.json();
+    }else geoByCity[city]=saved;
+  }else delete geoByCity[city];
 
   const records=[]; let from=0; const pageSize=1000;
   while(true){
@@ -103,8 +111,15 @@ async function saveSamples(city,rows) {
 async function saveZone(city,geo) {
   if(!supabaseClient){await persistCity(city);return;}
   if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
+  const objectName=city.toLocaleLowerCase('en-US').replace(/[^a-z0-9-]+/g,'-');
+  const storagePath=`zones/${objectName}.geojson`;
+  const geojsonFile=new Blob([JSON.stringify(geo)],{type:'application/geo+json'});
+  const {error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(storagePath,geojsonFile,{
+    contentType:'application/geo+json',cacheControl:'60',upsert:true
+  });
+  if(uploadError)throw uploadError;
   const {data,error}=await supabaseClient.from('city_zones')
-    .upsert({city,geojson:geo,updated_by:currentUser.id},{onConflict:'city'})
+    .upsert({city,geojson:{_storage_path:storagePath},updated_by:currentUser.id},{onConflict:'city'})
     .select('city,updated_at').single();
   if(error)throw error;
   if(data?.city!==city)throw new Error('Supabase tidak mengonfirmasi penyimpanan polygon untuk kabupaten ini.');
@@ -564,7 +579,7 @@ document.getElementById('geoInput').addEventListener('change',async event=>{
     geo={...geo,features:polygonFeatures};
     setLoadingStatus(`Menyiapkan ${polygonFeatures.length.toLocaleString('id-ID')} polygon zona…`);await browserPaint();
     city=citySelect.value; geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona…');await browserPaint();await reassignSpatialRows(city,geo);
-    setLoadingStatus('Menyimpan polygon ke Supabase…');await saveZone(city,geo);polygonSaved=true;
+    setLoadingStatus('Mengunggah GeoJSON zona ke Supabase Storage…');await saveZone(city,geo);polygonSaved=true;
     shouldFit=true;rebuildFilters();update();
     setLoadingStatus('Polygon tersimpan. Menyinkronkan titik sampel…');await browserPaint();await syncSpatialSamples(city);
     statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan dan ditampilkan: ${geo.features.length.toLocaleString('id-ID')} zona.`;
