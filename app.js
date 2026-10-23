@@ -638,6 +638,11 @@ function update() {
   document.getElementById('zonesRatio').textContent=geo?`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`:'Polygon belum dimuat';
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent='Semua tanggal';
+  const sampleTarget=calc.zoneCount*threshold;
+  const filledSampleSlots=[...calc.zoneSampleCounts.values()].reduce((sum,count)=>sum+Math.min(count,threshold),0);
+  const sampleProgress=sampleTarget?Math.min(100,Math.round(filledSampleSlots/sampleTarget*100)):0;
+  document.getElementById('sampleProgressPercent').textContent=`${sampleProgress}%`;
+  document.getElementById('sampleProgressHint').textContent=`${filledSampleSlots.toLocaleString('id-ID')} dari ${sampleTarget.toLocaleString('id-ID')} target sampel`;
   const pct=calc.zoneCount?Math.round(calc.completed.size/calc.zoneCount*100):0;
   document.getElementById('progressPercent').textContent=`${pct}%`;
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
