@@ -472,7 +472,7 @@ function featureZone(feature) {
   return propertyValue(p,['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA']);
 }
 
-function normalizedField(value) { return String(value||'').toLocaleLowerCase('id-ID').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,''); }
+function normalizedField(value) { return String(value||'').toLocaleLowerCase('id-ID').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,''); }
 function propertyValue(properties,aliases) {
   const entries=Object.entries(properties||{}); const keys=aliases.map(normalizedField);
   for(const alias of keys){const found=entries.find(([name,value])=>value!=null&&value!==''&&normalizedField(name)===alias);if(found)return found[1];}
@@ -588,7 +588,8 @@ function drawSampleMarkers(rows,allView=false){
     const isIndividual=dataKind!=null&&normalizedField(dataKind)==='individual';
     const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?'#7c3aed':'#e76f51',fillOpacity:.9});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
-    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TNH','LAND_VALUE']);
+    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TANAH_M2','NILAI_TANAH_M²','NILAI TANAH /M²','NILAI_TNH','LAND_VALUE'])
+      ??Object.entries(r.properties||{}).find(([name,value])=>value!=null&&value!==''&&normalizedField(name).startsWith('nilaitanah')&&normalizedField(name).includes('m2'))?.[1];
     const area=propertyValue(r.properties,['LUAS','LUAS_TANAH','LUAS_BIDANG','LUAS_M2','AREA','AREA_M2','SHAPE_AREA']);
     marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Jenis data: ${escapeHtml(dataKind==null||dataKind===''?'-':dataKind)}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}<br>Luas: ${escapeHtml(area==null||area===''?'-':area)}`);
     markerLayer.addLayer(marker);
