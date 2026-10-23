@@ -104,7 +104,14 @@ async function remoteZoneInfo(city) {
 }
 async function fetchZoneGeo(info,pathKey) {
   if(!info)return null;
-  if(!info[pathKey])return pathKey==='_overview_path'?null:info;
+  if(!info[pathKey]){
+    if(pathKey==='_overview_path'){
+      if(info._storage_path)return makeOverviewGeo(await fetchZoneGeo(info,'_storage_path'));
+      if(info.type==='FeatureCollection'||info.type==='Feature')return makeOverviewGeo(info);
+      return null;
+    }
+    return info;
+  }
   const {data}=supabaseClient.storage.from('zone-geojson').getPublicUrl(info[pathKey]);
   const response=await fetch(data.publicUrl,{cache:'force-cache'});
   if(!response.ok)throw new Error(`File polygon tidak dapat diunduh dari Supabase Storage (${response.status}).`);
