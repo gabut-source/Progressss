@@ -577,10 +577,11 @@ function drawSampleMarkers(rows,allView=false){
   const points=dedupPoints(rows).filter(r=>r.lon!=null&&r.lat!=null&&r.lon!==''&&r.lat!==''&&Number.isFinite(Number(r.lon))&&Number.isFinite(Number(r.lat))&&Math.abs(Number(r.lon))<=180&&Math.abs(Number(r.lat))<=90);
   if(allView&&map.getZoom()<10){document.getElementById('mapHint').textContent=`${points.length.toLocaleString('id-ID')} titik disembunyikan saat zoom jauh; perbesar untuk melihat sampel.`;return;}
   for(const r of points){
-    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:'#e76f51',fillOpacity:.9});
+    const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
+    const isIndividual=dataKind!=null&&normalizedField(dataKind)==='individual';
+    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?'#7c3aed':'#e76f51',fillOpacity:.9});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
     const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','LAND_VALUE']);
-    const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Jenis data: ${escapeHtml(dataKind==null||dataKind===''?'-':dataKind)}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}`);
     markerLayer.addLayer(marker);
   }
