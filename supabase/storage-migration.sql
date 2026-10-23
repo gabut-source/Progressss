@@ -7,7 +7,7 @@ values (
   'zone-geojson',
   true,
   52428800,
-  array['application/geo+json', 'application/json']::text[]
+  array['application/geo+json', 'application/json', 'application/gzip']::text[]
 )
 on conflict (id) do update
 set public = excluded.public,

@@ -26,6 +26,7 @@ Aplikasi Progress di-host di GitHub Pages dengan data bersama di Supabase. Admin
 - Unggah SHP sampel harian melalui **Tambah SHP sampel**. Atribut perlu memuat nomor sampel, nama surveyor, dan tanggal. Zona opsional; jika tidak tersedia, titik dicocokkan dengan polygon secara spasial.
 - Setelah unggahan berhasil, titik dan atribut disimpan ke Supabase. Semua pengguna melihat data terbaru saat membuka atau memuat ulang situs.
 - Target zona tetap 3 sampel. Rekap tabel menampilkan semua tanggal.
+- Halaman dibuka pada tampilan ALL menggunakan polygon ringkas dan tanpa popup per polygon; titik sampel baru digambar setelah peta diperbesar. Untuk data zona yang telah tersimpan sebelum fitur ini, admin perlu memilih setiap kabupaten lalu menekan **Siapkan polygon ringkas ALL** satu kali. Jalankan ulang `supabase/storage-migration.sql` di SQL Editor agar bucket mengizinkan file gzip. Tampilan kabupaten individual tetap menggunakan polygon penuh dan popup detail.
 
 ## Data lama di browser
 
