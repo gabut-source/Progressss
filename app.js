@@ -581,8 +581,9 @@ function drawSampleMarkers(rows,allView=false){
     const isIndividual=dataKind!=null&&normalizedField(dataKind)==='individual';
     const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?'#7c3aed':'#e76f51',fillOpacity:.9});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
-    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','LAND_VALUE']);
-    marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Jenis data: ${escapeHtml(dataKind==null||dataKind===''?'-':dataKind)}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}`);
+    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TNH','LAND_VALUE']);
+    const area=propertyValue(r.properties,['LUAS','LUAS_TANAH','LUAS_BIDANG','LUAS_M2','AREA','AREA_M2','SHAPE_AREA']);
+    marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Jenis data: ${escapeHtml(dataKind==null||dataKind===''?'-':dataKind)}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}<br>Luas: ${escapeHtml(area==null||area===''?'-':area)}`);
     markerLayer.addLayer(marker);
   }
   if(allView)document.getElementById('mapHint').textContent=`${points.length.toLocaleString('id-ID')} titik sampel ditampilkan pada zoom ${map.getZoom()}.`;
