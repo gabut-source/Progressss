@@ -10,6 +10,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
+const THEME_COLORS={primary:'#8E1EA2',secondary:'#C654C3',light:'#ED96D7',pale:'#FFC0DE'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -450,7 +451,7 @@ function zoomToZone(id) {
   if(!layers.length&&mapIsAllView&&geoForCurrentMap){
     const feature=(geoForCurrentMap.features||[]).find(item=>idKey(featureZone(item))===id);
     const bounds=geometryBounds(feature?.geometry);
-    if(bounds){selectedZoneId=id;map.fitBounds([[bounds[1],bounds[0]],[bounds[3],bounds[2]]],{maxZoom:16});polygonLayer?.setStyle(featureItem=>{const key=idKey(featureZone(featureItem));const done=currentCalculation?.completed.has(key);return {color:key===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:.7,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:.12};});}
+    if(bounds){selectedZoneId=id;map.fitBounds([[bounds[1],bounds[0]],[bounds[3],bounds[2]]],{maxZoom:16});polygonLayer?.setStyle(featureItem=>{const key=idKey(featureZone(featureItem));const done=currentCalculation?.completed.has(key);return {color:key===selectedZoneId?THEME_COLORS.primary:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:.7,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:.24};});}
     return;
   }
   if(!layers.length)return;
@@ -462,7 +463,7 @@ function zoomToZone(id) {
   layers[0].openPopup();
   polygonLayer?.setStyle(feature=>{
     const zone=featureZone(feature);const key=zone==null?'':idKey(zone);const done=zone!=null&&currentCalculation?.completed.has(key);
-    return {color:key===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:key===selectedZoneId?3:1.4,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:.27};
+    return {color:key===selectedZoneId?THEME_COLORS.primary:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:key===selectedZoneId?3:1.4,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:.38};
   });
 }
 
@@ -555,7 +556,7 @@ function renderMap(rows, calculation, geoOverride) {
       filter: feature => ['Polygon','MultiPolygon'].includes(feature.geometry?.type),
       style: feature => {
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
-        return {color:id===selectedZoneId?'#6d28d9':done?'#167d73':'#dc2626',weight:mapIsAllView ? .7 : 1.4,fillColor:done?'#2a9d8f':'#ef4444',fillOpacity:mapIsAllView ? .12 : .27};
+        return {color:id===selectedZoneId?THEME_COLORS.primary:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:mapIsAllView ? .7 : 1.4,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:mapIsAllView ? .24 : .38};
       },
       onEachFeature: mapIsAllView?undefined:(feature,layer) => {
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
@@ -586,7 +587,7 @@ function drawSampleMarkers(rows,allView=false){
   for(const r of points){
     const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     const isIndividual=dataKind!=null&&normalizedField(dataKind)==='individual';
-    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?'#7c3aed':'#e76f51',fillOpacity:.9});
+    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?THEME_COLORS.primary:THEME_COLORS.secondary,fillOpacity:.95});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
     const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_TANA','NILAI TANA','NILAI_TAN','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TANAH_M2','NILAI_TANAH_M²','NILAI TANAH /M²','NILAI_TNH','LAND_VALUE'])
       ??Object.entries(r.properties||{}).find(([name,value])=>value!=null&&value!==''&&normalizedField(name).startsWith('nilaitana'))?.[1];
