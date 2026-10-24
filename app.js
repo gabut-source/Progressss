@@ -10,7 +10,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
-const THEME_COLORS={primary:'#8E1EA2',secondary:'#C654C3',light:'#ED96D7',pale:'#FFC0DE'};
+const THEME_COLORS={primary:'#1746A2',secondary:'#C8102E',light:'#7FA6E8',pale:'#DCE7FA'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
