@@ -16,11 +16,13 @@ Aplikasi Progress di-host di GitHub Pages dengan data bersama di Supabase. Admin
    ```
 
 6. Buka `supabase-config.js`. Isi `url` dan `publishableKey` dari **Project Settings → API Keys**. Publishable/anon key boleh digunakan di browser jika kebijakan RLS tetap aktif. Jangan pernah masukkan `service_role` atau secret key ke file frontend.
-7. Commit dan push file aplikasi serta `supabase-config.js` ke GitHub. GitHub Pages akan tetap menjadi hosting situs.
+7. Pada **Authentication → URL Configuration**, atur **Site URL** ke `https://gabut-source.github.io/Progressss/` dan tambahkan `https://gabut-source.github.io/Progressss/**` ke **Redirect URLs**.
+8. Commit dan push file aplikasi serta `supabase-config.js` ke GitHub. GitHub Pages akan tetap menjadi hosting situs.
 
 ## Penggunaan
 
 - Buka **Admin**, login dengan email dan password Supabase yang dibuat pada langkah setup.
+- Untuk mengundang admin baru, gunakan **Authentication → Users → Add user → Send invitation**. Tautan undangan akan membuka formulir buat password di Progress. Setelah password tersimpan, pengguna kembali ke formulir login. Pastikan UUID pengguna juga terdaftar di `public.webgis_admins` agar ia memperoleh akses admin.
 - Pilih kabupaten pada dropdown utama.
 - Klik **Unggah ZIP SHP zona**, lalu pilih **Zona keseluruhan** untuk mengganti polygon kabupaten memakai ZIP shapefile biasa atau GeoJSON. ZIP harus berisi `.shp`, `.shx`, `.dbf`, dan `.prj` dengan nama dasar yang sama. Properti kode zona sebaiknya `NOZN`.
 - Pilih **Zona per surveyor** untuk ZIP yang berisi beberapa SHP polygon. Nama setiap SHP menjadi nama surveyor setelah awalan `ZONA` dihapus, misalnya `ZONA Husein.shp` menjadi surveyor **Husein**. Semua SHP harus memiliki kolom `NOZN`. Saat pertama kali memakai mode ini, sertakan semua SHP surveyor agar gabungan zona kabupaten lengkap. Unggahan berikutnya boleh berisi surveyor yang ingin diperbarui saja; semua zona lama milik surveyor tersebut diganti. Total zona dihitung dari gabungan `NOZN` unik, dan filter surveyor menampilkan zona tanggung jawabnya.

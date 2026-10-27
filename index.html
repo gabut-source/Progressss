@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=surveyor-zone-upload-1">
+  <link rel="stylesheet" href="style.css?v=invite-password-setup-1">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
@@ -24,6 +24,14 @@
         <label>Password<input id="adminPassword" type="password" autocomplete="current-password" required></label>
         <button class="button primary" type="submit">Masuk</button>
         <span id="adminMessage" role="status"></span>
+      </form>
+      <form id="setPasswordForm" class="admin-login set-password-form" hidden>
+        <p class="set-password-intro">Undangan Anda sudah dikonfirmasi. Buat password untuk menyelesaikan aktivasi akun.</p>
+        <label>Email<input id="inviteEmail" type="email" autocomplete="email" readonly required></label>
+        <label>Password baru<input id="invitePassword" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>Ulangi password<input id="invitePasswordConfirm" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="button primary" type="submit">Simpan password</button>
+        <span id="setPasswordMessage" role="status" aria-live="polite"></span>
       </form>
       <div id="adminTools" class="admin-tools" hidden>
         <p class="admin-city-note">Unggahan akan masuk ke kabupaten yang sedang dipilih: <strong id="adminCityName">Pamekasan</strong>.</p>
@@ -107,6 +115,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=surveyor-zone-upload-1"></script>
+  <script src="app.js?v=invite-password-setup-1"></script>
 </body>
 </html>

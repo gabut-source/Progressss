@@ -1,4 +1,9 @@
 /* Progress viewer: data are deduplicated by Nomor Identifikasi. */
+const invitationFlowAtLoad=(()=>{
+  const hash=new URLSearchParams(location.hash.replace(/^#/,'') );
+  const query=new URLSearchParams(location.search);
+  return hash.get('type')==='invite'||query.get('type')==='invite'||query.has('invite');
+})();
 const DB_NAME = 'webgis-progress-db';
 const BASE_DATA = window.APP_DATA?.cities || window.APP_DATA || {};
 let rowsByCity = Object.fromEntries(Object.entries(BASE_DATA).map(([k,v]) => [k, Array.isArray(v) ? v.slice() : (Array.isArray(v?.rows) ? v.rows.slice() : [])]));
@@ -940,6 +945,7 @@ geoInput.addEventListener('change',async event=>{
 
 const adminPanel=document.getElementById('adminPanel');
 const adminLogin=document.getElementById('adminLogin');
+const setPasswordForm=document.getElementById('setPasswordForm');
 const adminTools=document.getElementById('adminTools');
 document.getElementById('zoneSampleTable').addEventListener('click',event=>{
   const sortButton=event.target.closest('button[data-zone-sort]');
@@ -955,6 +961,29 @@ document.getElementById('zoneSampleTable').addEventListener('click',event=>{
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
+setPasswordForm.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const email=document.getElementById('inviteEmail').value.trim();
+  const password=document.getElementById('invitePassword').value;
+  const confirmation=document.getElementById('invitePasswordConfirm').value;
+  const message=document.getElementById('setPasswordMessage');
+  if(!supabaseClient){message.textContent='Koneksi Supabase tidak tersedia. Muat ulang halaman dan buka kembali tautan undangan.';return;}
+  if(password!==confirmation){message.textContent='Konfirmasi password belum sama.';return;}
+  if(password.length<8){message.textContent='Password minimal 8 karakter.';return;}
+  const submit=setPasswordForm.querySelector('button[type="submit"]');submit.disabled=true;message.textContent='Menyimpan password ke Supabase…';
+  try{
+    const {data,error}=await supabaseClient.auth.updateUser({password});
+    if(error)throw error;
+    await supabaseClient.auth.signOut();
+    setPasswordForm.hidden=true;adminLogin.hidden=false;
+    document.getElementById('adminEmail').value=data.user?.email||email;
+    document.getElementById('adminPassword').value='';
+    document.getElementById('setPasswordMessage').textContent='';
+    document.getElementById('adminMessage').textContent='Password berhasil dibuat. Silakan login dengan email dan password baru.';
+    setPasswordForm.reset();
+  }catch(error){message.textContent=`Password gagal disimpan: ${error.message||error}`;}
+  finally{submit.disabled=false;}
+});
 adminLogin.addEventListener('submit',async event=>{
   event.preventDefault();
   const email=document.getElementById('adminEmail').value.trim();
@@ -1011,7 +1040,16 @@ async function init() {
       legacyBrowserData=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(rowsByCity).map(([city,rows])=>[city,{rows,geo:geoByCity[city]||null}]))));
       document.getElementById('migrateLocalButton').hidden=!Object.values(legacyBrowserData).some(item=>item.rows.length||item.geo);
       const {data,error}=await supabaseClient.auth.getSession(); if(error)throw error;
-      if(data.session){
+      if(invitationFlowAtLoad&&data.session){
+        adminPanel.hidden=false;adminLogin.hidden=true;adminTools.hidden=true;setPasswordForm.hidden=false;
+        document.getElementById('inviteEmail').value=data.session.user?.email||'';
+        document.getElementById('setPasswordMessage').textContent='Undangan terkonfirmasi. Buat password untuk akun ini.';
+        const cleanUrl=new URL(location.href);cleanUrl.hash='';cleanUrl.searchParams.delete('invite');if(cleanUrl.searchParams.get('type')==='invite')cleanUrl.searchParams.delete('type');
+        history.replaceState({},document.title,cleanUrl.pathname+cleanUrl.search);
+      }else if(invitationFlowAtLoad&&!data.session){
+        adminPanel.hidden=false;adminLogin.hidden=true;setPasswordForm.hidden=false;
+        document.getElementById('setPasswordMessage').textContent='Sesi undangan tidak ditemukan atau tautan sudah kedaluwarsa. Minta admin mengirim undangan baru.';
+      }else if(data.session){
         const user=data.session.user;
         if(await verifyAdminUser(user)){currentUser=user;adminLogin.hidden=true;adminTools.hidden=false;}
         else await supabaseClient.auth.signOut();
