@@ -475,10 +475,36 @@ function featureZone(feature) {
 
 function normalizedField(value) { return String(value||'').toLocaleLowerCase('id-ID').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,''); }
 function propertyValue(properties,aliases) {
-  const entries=Object.entries(properties||{}); const keys=aliases.map(normalizedField);
-  for(const alias of keys){const found=entries.find(([name,value])=>value!=null&&value!==''&&normalizedField(name)===alias);if(found)return found[1];}
-  for(const alias of keys){if(alias.length<6)continue;const found=entries.find(([name,value])=>value!=null&&value!==''&&normalizedField(name).startsWith(alias));if(found)return found[1];}
-  for(const alias of keys){const found=entries.find(([name,value])=>value!=null&&value!==''&&normalizedField(name).length>=6&&alias.startsWith(normalizedField(name)));if(found)return found[1];}
+  const entries=Object.entries(properties||{}).filter(([,value])=>value!=null&&String(value).trim()!==''); const keys=aliases.map(normalizedField);
+  for(const alias of keys){const found=entries.find(([name])=>normalizedField(name)===alias);if(found)return found[1];}
+  for(const alias of keys){if(alias.length<6)continue;const found=entries.find(([name])=>normalizedField(name).startsWith(alias));if(found)return found[1];}
+  for(const alias of keys){const found=entries.find(([name])=>normalizedField(name).length>=6&&alias.startsWith(normalizedField(name)));if(found)return found[1];}
+  return null;
+}
+function landValueFromProperties(properties) {
+  const direct=propertyValue(properties,['NILAI_TANAH','NILAI TANAH','NILAI_TANA','NILAI TANA','NILAI_TAN','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TANAH_M2','NILAI_TANAH_M²','NILAI TANAH /M²','NILAI_TNH','LAND_VALUE']);
+  if(direct!=null)return direct;
+  return Object.entries(properties||{}).find(([name,value])=>{
+    const key=normalizedField(name);
+    return value!=null&&String(value).trim()!==''&&key.includes('nilai')&&(key.includes('tanah')||key.startsWith('nilaita'));
+  })?.[1]??null;
+}
+function landValueForSample(row) {
+  const fromSample=landValueFromProperties(row.properties);
+  if(fromSample!=null)return fromSample;
+  const zone=row.zone==null?'':idKey(row.zone);
+  if(!zone)return null;
+  const selectedCity=citySelect.value;
+  const cities=selectedCity==='ALL'?districtNames():[selectedCity];
+  for(const city of cities){
+    const geo=geoByCity[city];
+    for(const feature of geo?.features||[]){
+      if(idKey(featureZone(feature))!==zone)continue;
+      if(row.lon!=null&&row.lat!=null&&!pointInPolygonGeometry([Number(row.lon),Number(row.lat)],feature.geometry))continue;
+      const value=landValueFromProperties(feature.properties);
+      if(value!=null)return value;
+    }
+  }
   return null;
 }
 
@@ -589,8 +615,7 @@ function drawSampleMarkers(rows,allView=false){
     const isIndividual=dataKind!=null&&normalizedField(dataKind)==='individual';
     const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isIndividual?THEME_COLORS.primary:THEME_COLORS.secondary,fillOpacity:.95});
     const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
-    const landValue=propertyValue(r.properties,['NILAI_TANAH','NILAI TANAH','NILAI_TANA','NILAI TANA','NILAI_TAN','NILAI_ZNT','NILAI_TANAH_PER_M2','NILAI_TANAH_M2','NILAI_TANAH_M²','NILAI TANAH /M²','NILAI_TNH','LAND_VALUE'])
-      ??Object.entries(r.properties||{}).find(([name,value])=>value!=null&&value!==''&&normalizedField(name).startsWith('nilaitana'))?.[1];
+    const landValue=landValueForSample(r);
     const area=propertyValue(r.properties,['LUAS','LUAS_TANAH','LUAS_BIDANG','LUAS_M2','AREA','AREA_M2','SHAPE_AREA']);
     marker.bindPopup(`<b>Titik sampel</b><br>No. sampel: ${escapeHtml(r.sample)}<br>Zona: ${escapeHtml(r.zone)}<br>Surveyor: ${escapeHtml(r.surveyor)}<br>Tanggal: ${escapeHtml(fmtDate(r.date))}<br>Jenis data: ${escapeHtml(dataKind==null||dataKind===''?'-':dataKind)}<br>Harga: ${escapeHtml(price==null||price===''?'-':price)}<br>Nilai tanah: ${escapeHtml(landValue==null||landValue===''?'-':landValue)}<br>Luas: ${escapeHtml(area==null||area===''?'-':area)}`);
     markerLayer.addLayer(marker);
