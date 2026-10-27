@@ -22,7 +22,8 @@ Aplikasi Progress di-host di GitHub Pages dengan data bersama di Supabase. Admin
 
 - Buka **Admin**, login dengan email dan password Supabase yang dibuat pada langkah setup.
 - Pilih kabupaten pada dropdown utama.
-- Unggah polygon kabupaten melalui **Unggah SHP zona**. ZIP shapefile harus berisi `.shp`, `.shx`, `.dbf`, dan `.prj` dengan nama dasar yang sama. Properti kode zona sebaiknya `NOZN`.
+- Klik **Unggah ZIP SHP zona**, lalu pilih **Zona keseluruhan** untuk mengganti polygon kabupaten memakai ZIP shapefile biasa atau GeoJSON. ZIP harus berisi `.shp`, `.shx`, `.dbf`, dan `.prj` dengan nama dasar yang sama. Properti kode zona sebaiknya `NOZN`.
+- Pilih **Zona per surveyor** untuk ZIP yang berisi beberapa SHP polygon. Nama setiap SHP menjadi nama surveyor setelah awalan `ZONA` dihapus, misalnya `ZONA Husein.shp` menjadi surveyor **Husein**. Semua SHP harus memiliki kolom `NOZN`. Saat pertama kali memakai mode ini, sertakan semua SHP surveyor agar gabungan zona kabupaten lengkap. Unggahan berikutnya boleh berisi surveyor yang ingin diperbarui saja; semua zona lama milik surveyor tersebut diganti. Total zona dihitung dari gabungan `NOZN` unik, dan filter surveyor menampilkan zona tanggung jawabnya.
 - Unggah SHP sampel harian melalui **Tambah SHP sampel**. Atribut perlu memuat nomor sampel, nama surveyor, dan tanggal. Zona opsional; jika tidak tersedia, titik dicocokkan dengan polygon secara spasial.
 - Setelah unggahan berhasil, titik dan atribut disimpan ke Supabase. Semua pengguna melihat data terbaru saat membuka atau memuat ulang situs.
 - Target zona tetap 3 sampel. Rekap tabel menampilkan semua tanggal.

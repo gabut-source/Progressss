@@ -144,3 +144,9 @@ td.positive{color:var(--brand-900)}td.zero{color:#94A3B8}
 .status-line[data-loading="true"]::before{border-color:#DCE5F3;border-top-color:var(--brand-900)}
 .admin-login [role="status"]{color:#A30D25}
 .admin-help code{background:#FCECEF}
+.zone-upload-dialog{width:min(460px,calc(100vw - 28px));padding:22px;border:1px solid #DCE5F3;border-radius:18px;color:var(--brand-ink);box-shadow:0 24px 70px rgba(23,35,61,.22)}
+.zone-upload-dialog::backdrop{background:rgba(15,23,42,.48);backdrop-filter:blur(3px)}
+.zone-upload-dialog h3{margin:0 0 8px;font-size:18px}
+.zone-upload-dialog p{margin:0 0 18px;color:var(--brand-muted);font-size:13px;line-height:1.5}
+.zone-upload-dialog .header-actions{display:grid;grid-template-columns:1fr;gap:8px}
+.zone-upload-dialog .button{width:100%}

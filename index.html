@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=captain-america-palette-1">
+  <link rel="stylesheet" href="style.css?v=surveyor-zone-upload-1">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
@@ -28,7 +28,16 @@
       <div id="adminTools" class="admin-tools" hidden>
         <p class="admin-city-note">Unggahan akan masuk ke kabupaten yang sedang dipilih: <strong id="adminCityName">Pamekasan</strong>.</p>
         <div class="header-actions">
-          <label class="button primary" for="geoInput">Unggah ZIP SHP zona</label>
+          <button id="geoUploadButton" class="button primary" type="button">Unggah ZIP SHP zona</button>
+          <dialog id="zoneUploadDialog" class="zone-upload-dialog" aria-labelledby="zoneUploadTitle">
+            <h3 id="zoneUploadTitle">Pilih jenis unggahan zona</h3>
+            <p>Unggah polygon keseluruhan kabupaten atau polygon yang dibagi per surveyor.</p>
+            <div class="header-actions">
+              <button class="button primary" type="button" data-zone-upload-mode="overall">Zona keseluruhan</button>
+              <button class="button secondary" type="button" data-zone-upload-mode="surveyor">Zona per surveyor</button>
+              <button class="button ghost" type="button" data-zone-upload-cancel>Batalkan</button>
+            </div>
+          </dialog>
           <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
           <label class="button secondary" for="shpInput">Tambah SHP sampel</label>
           <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
@@ -38,7 +47,7 @@
           <button id="migrateLocalButton" class="button secondary" type="button" hidden>Impor data lama dari browser</button>
           <button id="adminLogout" class="button ghost" type="button">Keluar</button>
         </div>
-        <p class="admin-help">Unggahan akan disimpan ke database dan tersedia bagi pengguna lain setelah berhasil.</p>
+        <p class="admin-help">Unggahan tersimpan di database dan dapat dilihat semua pengguna. Untuk zona per surveyor, beri nama setiap SHP seperti <code>ZONA Husein.shp</code>; unggahan ulang mengganti zona surveyor tersebut.</p>
       </div>
     </section>
 
@@ -54,7 +63,7 @@
     <section id="statusLine" class="status-line" aria-live="polite"></section>
 
     <section class="kpis" aria-label="Ringkasan progress">
-      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small>Polygon kabupaten terpilih</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span id="zonesTotalLabel">Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small id="zonesTotalHint">Polygon kabupaten terpilih</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Sisa zona</span><strong id="zonesLeft">0</strong><small>Belum mencapai target sampel</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Total titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Semua tanggal</small></article>
@@ -98,6 +107,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=performance-1"></script>
+  <script src="app.js?v=surveyor-zone-upload-1"></script>
 </body>
 </html>
