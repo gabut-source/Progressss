@@ -246,7 +246,19 @@ async function saveZone(city,geo) {
   const {error:overviewError}=await supabaseClient.storage.from('zone-geojson').upload(overviewMetadata._overview_path,overviewFile,{
     contentType:overviewFile.type,cacheControl:'60',upsert:true
   });
-  if(overviewError)throw overviewError;
+  if(overviewError){
+    // Existing buckets may still restrict MIME types to GeoJSON/JSON because
+    // the storage migration was run before gzip support was added.
+    if(overviewMetadata._overview_compressed&&overviewError.code==='InvalidMimeType'){
+      overviewMetadata._overview_path=`zones/overview/${objectName}.geojson`;
+      overviewMetadata._overview_compressed=false;
+      const plainOverview=new Blob([overviewText],{type:'application/geo+json'});
+      const {error:fallbackError}=await supabaseClient.storage.from('zone-geojson').upload(overviewMetadata._overview_path,plainOverview,{
+        contentType:'application/geo+json',cacheControl:'60',upsert:true
+      });
+      if(fallbackError)throw fallbackError;
+    }else throw overviewError;
+  }
   const {data,error}=await supabaseClient.from('city_zones')
     .upsert({city,geojson:{_storage_path:storagePath,...overviewMetadata},updated_by:currentUser.id},{onConflict:'city'})
     .select('city,updated_at').single();
@@ -265,7 +277,12 @@ async function prepareExistingOverview(city){
   let file,path=`zones/overview/${objectName}.geojson`,compressed=false;
   if('CompressionStream'in window){file=new Blob([await new Response(new Blob([overviewText]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()],{type:'application/gzip'});path+=`.gz`;compressed=true;}
   else file=new Blob([overviewText],{type:'application/geo+json'});
-  const {error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(path,file,{contentType:file.type,cacheControl:'60',upsert:true});
+  let {error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(path,file,{contentType:file.type,cacheControl:'60',upsert:true});
+  if(uploadError&&compressed&&uploadError.code==='InvalidMimeType'){
+    path=`zones/overview/${objectName}.geojson`;compressed=false;
+    file=new Blob([overviewText],{type:'application/geo+json'});
+    ({error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(path,file,{contentType:'application/geo+json',cacheControl:'60',upsert:true}));
+  }
   if(uploadError)throw uploadError;
   const updated={...info,_overview_path:path,_overview_compressed:compressed};
   const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:updated,updated_by:currentUser.id},{onConflict:'city'});
