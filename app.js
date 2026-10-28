@@ -122,7 +122,7 @@ async function fetchZoneGeo(info,pathKey) {
   }
   const {data}=supabaseClient.storage.from('zone-geojson').getPublicUrl(info[pathKey]);
   const response=await fetch(data.publicUrl,{cache:'force-cache'});
-  if(!response.ok)throw new Error(`File polygon tidak dapat diunduh dari Supabase Storage (${response.status}).`);
+  if(!response.ok)throw new Error(`File polygon tidak dapat diunduh dari penyimpanan database (${response.status}).`);
   if(pathKey==='_overview_path'&&info._overview_compressed){
     if(!('DecompressionStream'in window))throw new Error('Browser ini belum mendukung pembukaan polygon ringkas. Perbarui browser Anda.');
     return await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
@@ -245,7 +245,7 @@ async function saveZone(city,geo) {
     .upsert({city,geojson:{_storage_path:storagePath,...overviewMetadata},updated_by:currentUser.id},{onConflict:'city'})
     .select('city,updated_at').single();
   if(error)throw error;
-  if(data?.city!==city)throw new Error('Supabase tidak mengonfirmasi penyimpanan polygon untuk kabupaten ini.');
+  if(data?.city!==city)throw new Error('Database tidak mengonfirmasi penyimpanan polygon untuk kabupaten ini.');
   geoOverviewByCity[city]=overview;remoteZoneMetadata.set(city,{_storage_path:storagePath,...overviewMetadata});
   remoteFullGeoLoaded.add(city);remoteOverviewLoaded.add(city);
 }
@@ -253,7 +253,7 @@ async function saveZone(city,geo) {
 async function prepareExistingOverview(city){
   if(!currentUser)throw new Error('Login sebagai admin terlebih dahulu.');
   const info=await remoteZoneInfo(city);
-  if(!info?._storage_path)throw new Error(`Polygon detail ${city} belum tersimpan di Supabase Storage.`);
+  if(!info?._storage_path)throw new Error(`Polygon detail ${city} belum tersimpan di database.`);
   const full=geoByCity[city]||await fetchZoneGeo(info,'_storage_path');
   const overview=makeOverviewGeo(full),overviewText=JSON.stringify(overview),objectName=city.toLocaleLowerCase('en-US').replace(/[^a-z0-9-]+/g,'-');
   const path=`zones/overview/${objectName}.geojson`;
@@ -276,7 +276,7 @@ async function syncSpatialSamples(city){
 
 function describeUploadError(error){
   if(!error)return 'Kesalahan tidak diketahui.';
-  if(error.code==='NoSuchBucket'||/bucket not found/i.test(error.message||''))return 'Bucket zone-geojson belum dibuat di Supabase. Jalankan file supabase/storage-migration.sql sekali di SQL Editor Supabase, lalu unggah ulang polygon.';
+  if(error.code==='NoSuchBucket'||/bucket not found/i.test(error.message||''))return 'Penyimpanan polygon belum disiapkan di database. Jalankan file supabase/storage-migration.sql sekali di SQL Editor, lalu unggah ulang polygon.';
   const parts=[error.message,error.details,error.hint,error.code?`Kode ${error.code}`:''].filter(Boolean);
   return parts.join(' — ')||String(error);
 }
@@ -908,7 +908,7 @@ geoInput.addEventListener('change',async event=>{
       setLoadingStatus(`Menggabungkan ${polygonCount.toLocaleString('id-ID')} polygon dari ${layers.length} surveyor…`);await browserPaint();
       const geo=combineSurveyorZones(geoByCity[city],layers);
       geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona gabungan…');await browserPaint();await reassignSpatialRows(city,geo);
-      setLoadingStatus('Menyimpan gabungan zona terbaru ke Supabase…');await saveZone(city,geo);polygonSaved=true;
+      setLoadingStatus('Menyimpan gabungan zona terbaru ke database…');await saveZone(city,geo);polygonSaved=true;
       shouldFit=true;rebuildFilters();update();
       setLoadingStatus('Polygon tersimpan. Menyinkronkan titik sampel…');await browserPaint();await syncSpatialSamples(city);
       statusLine.innerHTML=`Zona per surveyor untuk <strong>${escapeHtml(city)}</strong> berhasil diperbarui: ${layers.length} surveyor, ${geo.features.length.toLocaleString('id-ID')} zona unik. Zona surveyor yang diunggah diganti seluruhnya.`;
@@ -921,7 +921,7 @@ geoInput.addEventListener('change',async event=>{
       geo={...geo,features:polygonFeatures};
       setLoadingStatus(`Menyiapkan ${polygonFeatures.length.toLocaleString('id-ID')} polygon zona…`);await browserPaint();
       geoByCity[city]=geo;setLoadingStatus('Mencocokkan titik sampel ke zona…');await browserPaint();await reassignSpatialRows(city,geo);
-      setLoadingStatus('Mengunggah GeoJSON zona ke Supabase Storage…');await saveZone(city,geo);polygonSaved=true;
+      setLoadingStatus('Mengunggah GeoJSON zona ke database…');await saveZone(city,geo);polygonSaved=true;
       shouldFit=true;rebuildFilters();update();
       setLoadingStatus('Polygon tersimpan. Menyinkronkan titik sampel…');await browserPaint();await syncSpatialSamples(city);
       statusLine.innerHTML=`Polygon untuk <strong>${escapeHtml(city)}</strong> disimpan dan ditampilkan: ${geo.features.length.toLocaleString('id-ID')} zona.`;
@@ -930,7 +930,7 @@ geoInput.addEventListener('change',async event=>{
   catch(error){
     if(!polygonSaved&&zoneUploadMode==='surveyor'&&city){if(previousGeo)geoByCity[city]=previousGeo;else delete geoByCity[city];if(previousRows)rowsByCity[city]=previousRows;shouldFit=true;rebuildFilters();update();}
     const detail=describeUploadError(error);
-    const message=polygonSaved?`Polygon ${city} sudah tersimpan dan ditampilkan, tetapi sinkronisasi titik sampel gagal: ${detail}`:`Polygon gagal disimpan ke Supabase: ${detail}`;
+    const message=polygonSaved?`Polygon ${city} sudah tersimpan dan ditampilkan, tetapi sinkronisasi titik sampel gagal: ${detail}`:`Polygon gagal disimpan ke database: ${detail}`;
     statusLine.textContent=message;alert(message);
   }
   finally{endLoading();event.target.value='';zoneUploadMode='overall';geoInput.accept='.zip,.geojson,.json,application/zip,application/geo+json';}
@@ -960,10 +960,10 @@ setPasswordForm.addEventListener('submit',async event=>{
   const password=document.getElementById('invitePassword').value;
   const confirmation=document.getElementById('invitePasswordConfirm').value;
   const message=document.getElementById('setPasswordMessage');
-  if(!supabaseClient){message.textContent='Koneksi Supabase tidak tersedia. Muat ulang halaman dan buka kembali tautan undangan.';return;}
+  if(!supabaseClient){message.textContent='Koneksi database tidak tersedia. Muat ulang halaman dan buka kembali tautan undangan.';return;}
   if(password!==confirmation){message.textContent='Konfirmasi password belum sama.';return;}
   if(password.length<8){message.textContent='Password minimal 8 karakter.';return;}
-  const submit=setPasswordForm.querySelector('button[type="submit"]');submit.disabled=true;message.textContent='Menyimpan password ke Supabase…';
+  const submit=setPasswordForm.querySelector('button[type="submit"]');submit.disabled=true;message.textContent='Menyimpan password ke database…';
   try{
     const {data,error}=await supabaseClient.auth.updateUser({password});
     if(error)throw error;
@@ -982,11 +982,11 @@ adminLogin.addEventListener('submit',async event=>{
   const email=document.getElementById('adminEmail').value.trim();
   const password=document.getElementById('adminPassword').value;
   const message=document.getElementById('adminMessage');
-  if(!supabaseClient){message.textContent='Supabase belum dikonfigurasi. Isi URL dan publishable key di supabase-config.js.';return;}
+  if(!supabaseClient){message.textContent='Database belum dikonfigurasi. Isi URL dan publishable key di file konfigurasi.';return;}
   message.textContent='Memeriksa akun…';
   try{
     const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
-    if(error){message.textContent='Email belum terdaftar atau password salah. Periksa kembali email dan password akun Supabase Anda.';return;}
+    if(error){message.textContent='Email belum terdaftar atau password salah. Periksa kembali email dan password akun Anda.';return;}
     if(!await verifyAdminUser(data.user)){
       await supabaseClient.auth.signOut(); message.textContent='Akun ini belum diberi akses admin.';return;
     }
@@ -994,7 +994,7 @@ adminLogin.addEventListener('submit',async event=>{
     document.getElementById('adminCityName').textContent=citySelect.value;
   }catch(error){
     await supabaseClient.auth.signOut().catch(()=>{});
-    message.textContent=`Tidak dapat menghubungi Supabase atau memeriksa akses admin. Periksa koneksi dan konfigurasi. ${error.message||error}`;
+    message.textContent=`Tidak dapat menghubungi database atau memeriksa akses admin. Periksa koneksi dan konfigurasi. ${error.message||error}`;
   }
 });
 document.getElementById('adminLogout').addEventListener('click',async()=>{if(supabaseClient)await supabaseClient.auth.signOut();currentUser=null;adminTools.hidden=true;adminLogin.hidden=false;adminLogin.reset();});
@@ -1051,11 +1051,11 @@ async function init() {
       await loadRemoteData();
       endLoading();
       statusLine.textContent='Terhubung ke database bersama. Data akan diperbarui untuk semua pengguna setelah unggahan admin berhasil.';
-    }catch(error){endLoading();statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa setup Supabase.`;}
+    }catch(error){endLoading();statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa konfigurasi database.`;}
   }else{
     await restoreStoredData();
-    statusLine.textContent='Supabase belum dikonfigurasi. Data belum tersinkron antar pengguna.';
-    document.getElementById('adminMessage').textContent='Supabase belum dikonfigurasi. Isi URL dan publishable key terlebih dahulu.';
+    statusLine.textContent='Database belum dikonfigurasi. Data belum tersinkron antar pengguna.';
+    document.getElementById('adminMessage').textContent='Database belum dikonfigurasi. Isi URL dan publishable key terlebih dahulu.';
   }
   rebuildFilters(); update();
 }
