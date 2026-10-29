@@ -319,11 +319,17 @@ let map;
 let mapSelectedSurveyor='';
 let userLocationMarker=null;
 let userLocationAccuracy=null;
+let mapAllMarkersVisible=false;
+let mapSampleLabelsVisible=false;
 if (mapAvailable) {
   map = L.map('map', { zoomControl: true, preferCanvas:true }).setView([-7.05,113.7], 9);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    maxZoom:19,attribution:'Tiles &copy; Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
   }).addTo(map);
+  const streetLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,attribution:'&copy; OpenStreetMap contributors'
+  });
+  L.control.layers({'Satelit':satelliteLayer,'Peta jalan':streetLayer},null,{position:'topright',collapsed:true}).addTo(map);
   markerLayer = L.layerGroup();
   markerLayer.addTo(map);
   const locateControl=L.control({position:'topright'});
@@ -337,13 +343,12 @@ if (mapAvailable) {
     return container;
   };
   locateControl.addTo(map);
-  let allMarkersVisible=map.getZoom()>=10;
   map.on('zoomend',()=>{
-    if(!mapIsAllView)return;
-    const visible=map.getZoom()>=10;
-    if(visible===allMarkersVisible)return;
-    allMarkersVisible=visible;
-    drawSampleMarkers(mapRowsForRender,true,mapSelectedSurveyor);
+    const allVisible=map.getZoom()>=10;
+    const labelsVisible=map.getZoom()>=14;
+    const redraw=(mapIsAllView&&allVisible!==mapAllMarkersVisible)||labelsVisible!==mapSampleLabelsVisible;
+    mapAllMarkersVisible=allVisible;mapSampleLabelsVisible=labelsVisible;
+    if(redraw)drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor);
   });
 }
 
@@ -652,6 +657,8 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
     if (bounds.length) { let b=bounds[0]; for (const x of bounds.slice(1)) b=b.extend(x); map.fitBounds(b.pad(.08),{maxZoom:mapIsAllView?9:14}); }
     shouldFit=false;
   }
+  mapAllMarkersVisible=map.getZoom()>=10;
+  mapSampleLabelsVisible=map.getZoom()>=14;
   drawSampleMarkers(markerRows,mapIsAllView,selectedSurveyor);
   document.getElementById('mapHint').textContent=`${mapIsAllView&&map.getZoom()<10?`${shown.length.toLocaleString('id-ID')} titik disembunyikan saat zoom jauh; perbesar untuk melihat sampel`: `${shown.length.toLocaleString('id-ID')} titik sampel ditampilkan`}${geo?` • ${polygonCount} polygon`:' • polygon belum dimuat'}.`;
 }
@@ -666,6 +673,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor=''){
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
     const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isOtherSurveyor?'#EC4899':isIndividual?THEME_COLORS.primary:THEME_COLORS.secondary,fillOpacity:.95});
+    if(map.getZoom()>=14&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
       const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
       const price=propertyValue(r.properties,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']);
