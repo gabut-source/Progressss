@@ -318,6 +318,8 @@ citySelect.value='ALL';
 const mapAvailable = typeof L !== 'undefined';
 let map;
 let mapSelectedSurveyor='';
+let userLocationMarker=null;
+let userLocationAccuracy=null;
 if (mapAvailable) {
   map = L.map('map', { zoomControl: true, preferCanvas:true }).setView([-7.05,113.7], 9);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -325,6 +327,17 @@ if (mapAvailable) {
   }).addTo(map);
   markerLayer = L.layerGroup();
   markerLayer.addTo(map);
+  const locateControl=L.control({position:'topright'});
+  locateControl.onAdd=()=>{
+    const container=L.DomUtil.create('div','leaflet-bar leaflet-control locate-control');
+    const button=L.DomUtil.create('button','locate-button',container);
+    button.type='button';button.title='Tampilkan lokasi saya';button.setAttribute('aria-label','Tampilkan lokasi saya');
+    button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3m0 14v3M2 12h3m14 0h3M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/></svg>';
+    L.DomEvent.disableClickPropagation(container);
+    L.DomEvent.on(button,'click',L.DomEvent.stop).on(button,'click',locateCurrentUser);
+    return container;
+  };
+  locateControl.addTo(map);
   let allMarkersVisible=map.getZoom()>=10;
   map.on('zoomend',()=>{
     if(!mapIsAllView)return;
@@ -333,6 +346,25 @@ if (mapAvailable) {
     allMarkersVisible=visible;
     drawSampleMarkers(mapRowsForRender,true,mapSelectedSurveyor);
   });
+}
+
+function locateCurrentUser(){
+  if(!navigator.geolocation){statusLine.textContent='Browser ini tidak mendukung akses lokasi.';return;}
+  statusLine.textContent='Meminta izin lokasi dari browser…';
+  navigator.geolocation.getCurrentPosition(position=>{
+    const {latitude,longitude,accuracy}=position.coords;
+    const location=[latitude,longitude];
+    if(userLocationMarker)userLocationMarker.setLatLng(location);
+    else userLocationMarker=L.marker(location,{icon:L.divIcon({className:'user-location-marker',html:'<span></span>',iconSize:[22,22],iconAnchor:[11,11]}),keyboard:true,title:'Lokasi saya'}).addTo(map);
+    if(userLocationAccuracy)userLocationAccuracy.setLatLng(location).setRadius(accuracy);
+    else userLocationAccuracy=L.circle(location,{radius:accuracy,color:'#2563EB',weight:1,fillColor:'#60A5FA',fillOpacity:.12,interactive:false}).addTo(map);
+    userLocationMarker.bindPopup(`Lokasi Anda<br>Akurasi sekitar ${Math.round(accuracy)} m`);
+    map.flyTo(location,Math.max(map.getZoom(),15),{duration:.7});
+    statusLine.textContent=`Lokasi Anda ditampilkan pada peta (akurasi sekitar ${Math.round(accuracy)} m).`;
+  },error=>{
+    const message=error.code===1?'Izin lokasi ditolak. Aktifkan izin lokasi untuk situs ini di pengaturan browser.':error.code===2?'Lokasi tidak tersedia. Pastikan layanan lokasi perangkat aktif.':'Permintaan lokasi melewati batas waktu. Coba tekan tombol lokasi lagi.';
+    statusLine.textContent=message;
+  },{enableHighAccuracy:true,timeout:20000,maximumAge:30000});
 }
 
 function currentRows() {
