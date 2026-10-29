@@ -633,11 +633,13 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
         return {color:id===selectedZoneId?THEME_COLORS.primary:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:mapIsAllView ? .7 : 1.4,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:mapIsAllView ? .24 : .38};
       },
-      onEachFeature: mapIsAllView?undefined:(feature,layer) => {
+      onEachFeature: (feature,layer) => {
         const z=featureZone(feature); const id=z==null?'':idKey(z); const done=z!=null&&calculation.completed.has(id);
         const n=z==null?0:(calculation.zoneSampleCounts.get(id)||0);
+        const owners=unique(feature.properties?._zone_surveyors||[]);
+        const ownerText=owners.length?owners.map(escapeHtml).join(', '):'Belum ditetapkan';
         if(id){if(!zoneLayersById.has(id))zoneLayersById.set(id,[]);zoneLayersById.get(id).push(layer);}
-        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}`);
+        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Pemilik zona: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}`);
       }
     }).addTo(map);
     polygonCount=geo.features?.length||0;
