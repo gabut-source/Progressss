@@ -160,10 +160,8 @@ async function loadRemoteData() {
   const {data,error}=await supabaseClient.from('city_zones').select('city');
   if(error)throw error;
   for(const row of data||[])addCityOption(row.city);
-  citySelect.value='ALL';
-  // ALL is the landing view. It requests only simplified overview polygons.
   if(citySelect.value==='ALL')await loadAllRemoteCities();
-  else await loadRemoteCity(citySelect.value);
+  else if(citySelect.value)await loadRemoteCity(citySelect.value);
 }
 
 function districtNames(){return [...citySelect.options].map(option=>option.value).filter(city=>city&&city!=='ALL');}
@@ -308,12 +306,13 @@ const keyOf = row => text(row.ident || row.sample || `${row.date}|${row.surveyor
 const idKey = value => text(value).replace(/\.0$/, '').toLocaleLowerCase('id-ID');
 const unique = values => [...new Set(values.filter(v => v != null && v !== ''))];
 
+const chooseCityOption=document.createElement('option');chooseCityOption.value='';chooseCityOption.textContent='Pilih kabupaten';chooseCityOption.disabled=true;chooseCityOption.selected=true;citySelect.append(chooseCityOption);
 for (const city of [...new Set(['Bangkalan','Pamekasan','Sampang','Sumenep',...Object.keys(rowsByCity)])].sort()) {
   if (!rowsByCity[city]) rowsByCity[city]=[];
   const option = document.createElement('option'); option.value = city; option.textContent = city; citySelect.append(option);
 }
 const allCityOption=document.createElement('option');allCityOption.value='ALL';allCityOption.textContent='ALL';citySelect.append(allCityOption);
-citySelect.value='ALL';
+citySelect.value='';
 
 const mapAvailable = typeof L !== 'undefined';
 let map;
@@ -368,6 +367,7 @@ function locateCurrentUser(){
 }
 
 function currentRows() {
+  if(!citySelect.value)return [];
   if(citySelect.value!=='ALL')return rowsByCity[citySelect.value]||[];
   return districtNames().flatMap(city=>(rowsByCity[city]||[]).map(row=>({...row,_city:city,zone:row.zone?`${city} • ${row.zone}`:row.zone})));
 }
@@ -712,6 +712,7 @@ function downloadAchievementWorkbook(){
 
 function update() {
   const city=citySelect.value; const isAll=city==='ALL'; const selectedPerson=surveyorSelect.value;
+  document.getElementById('adminCityName').textContent=city||'Belum dipilih';
   const threshold=TARGET_SAMPLES_PER_ZONE;
   const source=currentRows();
   const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
@@ -719,22 +720,24 @@ function update() {
   const geo=geoForSurveyor(allGeo,selectedPerson);
   // Dashboard zone totals must come from uploaded polygons, not sample rows.
   const knownZones=new Set(geo?unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
-  const calc=calculate(filtered,threshold,knownZones); const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
+  const calc=calculate(filtered,threshold,knownZones);
+  const zoneCalc=calculate(source,threshold,knownZones);
+  const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
   const dates=allDates(filtered);
   const hasAssignedZones=(allGeo?.features||[]).some(feature=>Array.isArray(feature.properties?._zone_surveyors));
   document.getElementById('zonesTotalLabel').textContent=selectedPerson&&hasAssignedZones?`Zona milik ${selectedPerson}`:'Total zona keseluruhan';
   document.getElementById('zonesTotalHint').textContent=selectedPerson&&hasAssignedZones?'Jumlah zona sesuai surveyor terpilih':'Polygon kabupaten terpilih';
   document.getElementById('zonesTotal').textContent=calc.zoneCount.toLocaleString('id-ID');
-  document.getElementById('zonesDone').textContent=calc.completed.size.toLocaleString('id-ID');
-  document.getElementById('zonesLeft').textContent=Math.max(0,calc.zoneCount-calc.completed.size).toLocaleString('id-ID');
-  document.getElementById('zonesRatio').textContent=!allGeo?'Polygon belum dimuat':selectedPerson&&hasAssignedZones?`zona tanggung jawab ${selectedPerson}`:`dari ${calc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
+  document.getElementById('zonesDone').textContent=zoneCalc.completed.size.toLocaleString('id-ID');
+  document.getElementById('zonesLeft').textContent=Math.max(0,zoneCalc.zoneCount-zoneCalc.completed.size).toLocaleString('id-ID');
+  document.getElementById('zonesRatio').textContent=!allGeo?'Polygon belum dimuat':selectedPerson&&hasAssignedZones?`zona tanggung jawab ${selectedPerson}`:`dari ${zoneCalc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent='Semua tanggal';
   const sampleTarget=calc.zoneCount*threshold;
   const sampleProgress=sampleTarget?Math.min(100,Math.round(points.length/sampleTarget*100)):0;
   document.getElementById('sampleProgressPercent').textContent=`${sampleProgress}%`;
   document.getElementById('sampleProgressHint').textContent=`${points.length.toLocaleString('id-ID')} dari ${sampleTarget.toLocaleString('id-ID')} target sampel`;
-  const pct=calc.zoneCount?Math.round(calc.completed.size/calc.zoneCount*100):0;
+  const pct=zoneCalc.zoneCount?Math.round(zoneCalc.completed.size/zoneCalc.zoneCount*100):0;
   document.getElementById('progressPercent').textContent=`${pct}%`;
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
   document.getElementById('surveyorHint').textContent=selectedPerson||'Pada kabupaten terpilih';
@@ -742,24 +745,25 @@ function update() {
   // Daily zone awards use the complete dataset even when the map's surveyor
   // filter is active; otherwise each surveyor would be incorrectly evaluated
   // as if they had collected every sample alone.
-  const awardCalc=selectedPerson?calculate(source,threshold,knownZones):calc;
+  const awardCalc=zoneCalc;
   const awardDates=allDates(source);
   const awardPeople=unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
   const hasCollaboration=[...awardCalc.awards.keys()].some(k=>k.endsWith('\u0000Kolaborasi'));
-  const displayedZonePeople=selectedPerson?unique([selectedPerson,...(hasCollaboration?['Kolaborasi']:[])]):unique([...awardPeople,...(hasCollaboration?['Kolaborasi']:[])]);
+  const displayedZonePeople=unique([...awardPeople,...(hasCollaboration?['Kolaborasi']:[])]);
   renderTable('zoneTable','zona',awardDates,displayedZonePeople,(d,p)=>awardCalc.awards.get(`${d}\u0000${p}`));
   const sampleCounts=new Map();
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
-  renderZoneSampleList(geo,calc);
-  renderMap(filtered,calc,geo,selectedPerson?source:filtered,selectedPerson);
+  renderZoneSampleList(geo,zoneCalc);
+  renderMap(filtered,zoneCalc,geo,selectedPerson?source:filtered,selectedPerson);
   document.getElementById('otherSurveyorLegend').hidden=!selectedPerson;
   if(isAll){
     const missing=districtNames().filter(name=>remoteZoneMetadata.has(name)&&remoteZoneMetadata.get(name)?._storage_path&&!remoteZoneMetadata.get(name)?._overview_path);
     if(missing.length)document.getElementById('mapHint').textContent=`Tampilan ALL ringan: polygon ringkas belum disiapkan untuk ${missing.join(', ')}. Admin dapat memilih kabupaten tersebut lalu menekan “Siapkan polygon ringkas ALL”.`;
   }
   const geoNote=isAll?`${districtNames().length} kabupaten dalam tampilan gabungan.`:geoByCity[city]?'Polygon dimuat.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
-  statusLine.innerHTML=`Data <strong>${escapeHtml(city)}</strong>: ${source.length.toLocaleString('id-ID')} baris valid • ${geoNote}`;
+  statusLine.innerHTML=city?`Data <strong>${escapeHtml(city)}</strong>: ${source.length.toLocaleString('id-ID')} baris valid • ${geoNote}`:'Pilih kabupaten untuk memuat polygon dan titik sampel.';
+  if(!city)document.getElementById('mapHint').textContent='Pilih kabupaten untuk menampilkan polygon dan titik sampel.';
 }
 
 function normalizeHeader(obj) { const result={}; for (const [k,v] of Object.entries(obj)) result[String(k).trim().toLowerCase().replace(/[_*]/g,'').replace(/\s+/g,' ')]=v; return result; }
@@ -850,7 +854,7 @@ function importSampleFeatures(geo,city) {
 
 document.getElementById('shpInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
-  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
+  if(!citySelect.value||citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
   try{
     beginLoading('Membaca ZIP shapefile titik…');await browserPaint();
     const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
@@ -884,7 +888,7 @@ citySelect.addEventListener('change',async()=>{
 surveyorSelect.addEventListener('change',update);
 document.getElementById('excelInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
-  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
+  if(!citySelect.value||citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
   try {
     beginLoading('Membaca file Excel…');await browserPaint();
     if(!window.XLSX)throw new Error('Pustaka Excel tidak termuat. Periksa koneksi internet lalu muat ulang halaman.');
@@ -919,7 +923,7 @@ zoneUploadDialog.addEventListener('click',event=>{
 });
 geoInput.addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
-  if(citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah zona.');event.target.value='';return;}
+  if(!citySelect.value||citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah zona.');event.target.value='';return;}
   let polygonSaved=false;let city='';let previousGeo=null;let previousRows=null;
   try{
     city=citySelect.value;
@@ -1045,7 +1049,7 @@ document.getElementById('migrateLocalButton').addEventListener('click',async()=>
 document.getElementById('prepareOverviewButton').addEventListener('click',async()=>{
   if(!currentUser){alert('Login sebagai admin terlebih dahulu.');return;}
   const city=citySelect.value;
-  if(city==='ALL'){alert('Pilih satu kabupaten dahulu untuk menyiapkan polygon ringkas.');return;}
+  if(!city||city==='ALL'){alert('Pilih satu kabupaten dahulu untuk menyiapkan polygon ringkas.');return;}
   const button=document.getElementById('prepareOverviewButton');button.disabled=true;
   beginLoading(`Membuat polygon ringkas untuk ${city}…`);await browserPaint();
   try{
@@ -1078,7 +1082,7 @@ async function init() {
         if(await verifyAdminUser(user)){currentUser=user;adminLogin.hidden=true;adminTools.hidden=false;}
         else await supabaseClient.auth.signOut();
       }
-      beginLoading(`Memuat tampilan ALL dan sampel…`);
+      beginLoading('Menghubungkan ke database…');
       await loadRemoteData();
       endLoading();
       statusLine.textContent='Terhubung ke database bersama. Data akan diperbarui untuk semua pengguna setelah unggahan admin berhasil.';
