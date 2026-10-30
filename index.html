@@ -71,8 +71,8 @@
 
     <section class="kpis" aria-label="Ringkasan progress">
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span id="zonesTotalLabel">Total zona keseluruhan</span><strong id="zonesTotal">0</strong><small id="zonesTotalHint">Polygon kabupaten terpilih</small></article>
-      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
-      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Sisa zona</span><strong id="zonesLeft">0</strong><small>Belum mencapai target sampel</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span id="zonesDoneLabel">Zona tercapai</span><strong id="zonesDone">0</strong><small id="zonesRatio">0 dari 0 zona</small></article>
+      <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span id="zonesLeftLabel">Sisa zona</span><strong id="zonesLeft">0</strong><small id="zonesLeftHint">Belum mencapai target sampel</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Total titik sampel</span><strong id="sampleCount">0</strong><small id="samplePeriod">Semua tanggal</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Progres Titik Sampel</span><strong id="sampleProgressPercent">0%</strong><small id="sampleProgressHint">0 dari 0 target sampel</small></article>
       <article class="kpi transition duration-200 hover:-translate-y-1 hover:shadow-lg"><span>Progres Zona</span><strong id="progressPercent">0%</strong><small id="progressHint">Berdasarkan filter aktif</small></article>
@@ -98,7 +98,7 @@
         <div class="table-wrap"><table id="zoneSampleTable"></table></div>
       </article>
       <article class="table-panel">
-        <div class="section-heading"><div><h2>Zona tercapai per surveyor</h2><p>Zona dicatat pada tanggal pertama jumlah sampelnya mencapai target.</p></div></div>
+        <div class="section-heading"><div><h2>Zona tercapai per surveyor</h2><p>Zona direkap pada pemilik terbaru di file zona, pada tanggal target 3 sampel pertama kali tercapai. Perubahan pemilik memindahkan zona dari rekap pemilik sebelumnya.</p></div></div>
         <div class="table-wrap"><table id="zoneTable"></table></div>
       </article>
       <article class="table-panel">

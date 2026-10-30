@@ -388,7 +388,10 @@ function geoForSurveyor(geo,surveyor){
   if(!geo||!surveyor)return geo;
   const assigned=(geo.features||[]).some(feature=>Array.isArray(feature.properties?._zone_surveyors));
   if(!assigned)return geo;
-  return {...geo,features:(geo.features||[]).filter(feature=>feature.properties?._zone_surveyors?.includes(surveyor))};
+  return {...geo,features:(geo.features||[]).filter(feature=>{
+    const owners=unique(feature.properties?._zone_surveyors||[]);
+    return owners.length===1&&owners[0]===surveyor;
+  })};
 }
 function allDates(rows) { return unique(rows.map(r => r.date)).sort(); }
 function rebuildFilters() {
@@ -418,7 +421,7 @@ function calculate(rows, threshold, knownZones=null) {
     const samples=byZone.get(zk),sampleKey=keyOf(r),existing=samples.get(sampleKey);
     if(!existing||r.date<existing.date)samples.set(sampleKey,r);
   }
-  const completed=new Set(); const awards=new Map(); const zoneSampleCounts=new Map(); const individualZones=new Set();
+  const completed=new Set(); const awards=new Map(); const zoneAwardsByZone=new Map(); const zoneSampleCounts=new Map(); const individualZones=new Set();
   for(const row of rows){
     if(!row.zone)continue;
     const kind=propertyValue(row.properties,['JENIS_DATA','JENISDATA']);
@@ -433,16 +436,43 @@ function calculate(rows, threshold, knownZones=null) {
     zoneSampleCounts.set(zone,uniqueSamples.size);
     let total=0; let already=false;
     for (const [day, samples] of [...byDay.entries()].sort((a,b)=>a[0].localeCompare(b[0]))) {
-      total += samples.size;
-      if (!already && total >= threshold) {
+      if (!already && total + samples.size >= threshold) {
         already=true; completed.add(zone);
-        const persons=unique([...samples.values()].map(r=>r.surveyor));
-        const owner=persons.length===1 ? persons[0] : 'Kolaborasi';
+        const remaining=threshold-total;
+        const bySurveyor=new Map();
+        for(const row of samples.values())bySurveyor.set(row.surveyor,(bySurveyor.get(row.surveyor)||0)+1);
+        const candidates=[...bySurveyor].filter(([,count])=>count>=remaining).map(([person])=>person);
+        const owner=candidates.length===1?candidates[0]:'Kolaborasi';
+        // A zone receives one historical credit, fixed to the surveyor(s)
+        // whose samples first brought its cumulative total to the threshold.
+        // With date-only data, simultaneous contributors on the crossing day
+        // are recorded once as Kolaborasi rather than credited twice.
+        zoneAwardsByZone.set(zone,{date:day,surveyor:owner});
         const k=`${day}\u0000${owner}`; awards.set(k,(awards.get(k)||0)+1);
       }
+      total += samples.size;
     }
   }
-  return {completed, awards, zoneSampleCounts, individualZones, zoneCount:knownZones ? knownZones.size : byZone.size};
+  return {completed, awards, zoneAwardsByZone, zoneSampleCounts, individualZones, zoneCount:knownZones ? knownZones.size : byZone.size};
+}
+
+function reattributeZoneAwards(calculation,geo){
+  const currentOwners=new Map();
+  for(const feature of geo?.features||[]){
+    const zone=featureZone(feature);if(zone==null)continue;
+    const owners=unique(feature.properties?._zone_surveyors||[]);
+    if(owners.length===1)currentOwners.set(idKey(zone),owners[0]);
+    else if(owners.length>1)currentOwners.set(idKey(zone),'Kolaborasi');
+  }
+  const zoneAwardsByZone=new Map(),awards=new Map();
+  for(const [zone,trigger] of calculation.zoneAwardsByZone){
+    // Ownership follows the newest zone upload; without owner metadata, retain
+    // the surveyor who supplied the threshold-crossing sample as a fallback.
+    const surveyor=currentOwners.get(zone)||trigger.surveyor;
+    const award={date:trigger.date,surveyor};zoneAwardsByZone.set(zone,award);
+    const key=`${award.date}\u0000${surveyor}`;awards.set(key,(awards.get(key)||0)+1);
+  }
+  return {...calculation,awards,zoneAwardsByZone};
 }
 
 function renderTable(id, title, dates, people, valueAt) {
@@ -472,6 +502,7 @@ function renderZoneSampleList(geo, calculation) {
     const button=document.createElement('button');button.type='button';button.className='zone-sort-button';button.dataset.zoneSort=key;
     button.textContent=`${label}${zoneListSort.key===key?(zoneListSort.direction==='asc'?' ↑':' ↓'):' ↕'}`;th.append(button);headRow.append(th);
   }
+  const creditHeader=document.createElement('th');creditHeader.textContent='Dihitung untuk pemilik';headRow.append(creditHeader);
   thead.append(headRow);table.append(thead);
   const tbody=document.createElement('tbody');
   const features=(geo?.features||[]).filter(feature=>featureZone(feature)!=null);
@@ -497,9 +528,10 @@ function renderZoneSampleList(geo, calculation) {
     const countCell=document.createElement('td');countCell.textContent=count.toLocaleString('id-ID');
     const statusCell=document.createElement('td');statusCell.textContent=done?'Tercapai':'Belum tercapai';statusCell.className=done?'zone-done':'zone-pending';
     const individualCell=document.createElement('td');const hasIndividual=calculation.individualZones.has(id);individualCell.textContent=hasIndividual?'Ya':'Tidak';individualCell.className=hasIndividual?'zone-done':'zone-no';
-    row.append(zoneCell,countCell,statusCell,individualCell);tbody.append(row);
+    const creditCell=document.createElement('td');const credit=calculation.zoneAwardsByZone?.get(id);creditCell.textContent=credit?`${credit.surveyor} • ${fmtDate(credit.date)}`:'—';
+    row.append(zoneCell,countCell,statusCell,individualCell,creditCell);tbody.append(row);
   }
-  if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=4;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
+  if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=5;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
   table.append(tbody);
 }
 
@@ -643,8 +675,10 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
         const n=z==null?0:(calculation.zoneSampleCounts.get(id)||0);
         const owners=unique(feature.properties?._zone_surveyors||[]);
         const ownerText=owners.length?owners.map(escapeHtml).join(', '):'Belum ditetapkan';
+        const credit=calculation.zoneAwardsByZone?.get(id);
+        const creditText=credit?`<br>Rekap pemilik: ${escapeHtml(credit.surveyor)} • ${escapeHtml(fmtDate(credit.date))}`:'';
         if(id){if(!zoneLayersById.has(id))zoneLayersById.set(id,[]);zoneLayersById.get(id).push(layer);}
-        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Pemilik zona: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}`);
+        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Pemilik zona saat ini: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}${creditText}`);
       }
     }).addTo(map);
     polygonCount=geo.features?.length||0;
@@ -727,39 +761,53 @@ function update() {
   const source=currentRows();
   const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
   const allGeo=isAll?combinedDistrictGeo():geoByCity[city];
-  const geo=geoForSurveyor(allGeo,selectedPerson);
-  // Dashboard zone totals must come from uploaded polygons, not sample rows.
+  // Calculate each unique zone once across the complete current zone set.
+  const allKnownZones=new Set(allGeo?unique((allGeo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
+  const sampleCalc=calculate(source,threshold,allKnownZones);
+  const zoneCalc=reattributeZoneAwards(sampleCalc,allGeo);
+  // Keep ownership progress tied to the current assignment. All surveyors'
+  // samples count toward the current owner's target, even if another person
+  // supplied the sample that crossed the threshold.
+  const ownedGeo=geoForSurveyor(allGeo,selectedPerson);
+  const ownedZones=new Set(ownedGeo?unique((ownedGeo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
+  const progressCalc=selectedPerson&&ownedGeo!==allGeo?calculate(source,threshold,ownedZones):zoneCalc;
+  // Surveyor filters follow current ownership; a zone transfers fully to its
+  // newest owner and leaves the previous owner's progress and rekap row.
+  const geo=ownedGeo;
   const knownZones=new Set(geo?unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
   const calc=calculate(filtered,threshold,knownZones);
-  const zoneCalc=calculate(source,threshold,knownZones);
   const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
   const dates=allDates(filtered);
   const hasAssignedZones=(allGeo?.features||[]).some(feature=>Array.isArray(feature.properties?._zone_surveyors));
-  document.getElementById('zonesTotalLabel').textContent=selectedPerson&&hasAssignedZones?`Zona milik ${selectedPerson}`:'Total zona keseluruhan';
-  document.getElementById('zonesTotalHint').textContent=selectedPerson&&hasAssignedZones?'Jumlah zona sesuai surveyor terpilih':'Polygon kabupaten terpilih';
-  document.getElementById('zonesTotal').textContent=calc.zoneCount.toLocaleString('id-ID');
-  document.getElementById('zonesDone').textContent=zoneCalc.completed.size.toLocaleString('id-ID');
-  document.getElementById('zonesLeft').textContent=Math.max(0,zoneCalc.zoneCount-zoneCalc.completed.size).toLocaleString('id-ID');
-  document.getElementById('zonesRatio').textContent=!allGeo?'Polygon belum dimuat':selectedPerson&&hasAssignedZones?`zona tanggung jawab ${selectedPerson}`:`dari ${zoneCalc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
+  document.getElementById('zonesTotalLabel').textContent=selectedPerson&&hasAssignedZones?`Zona tanggung jawab ${selectedPerson}`:'Total zona keseluruhan';
+  document.getElementById('zonesTotalHint').textContent=selectedPerson&&hasAssignedZones?'Mengikuti pembagian zona terbaru':'Polygon kabupaten terpilih';
+  document.getElementById('zonesTotal').textContent=progressCalc.zoneCount.toLocaleString('id-ID');
+  document.getElementById('zonesDoneLabel').textContent=selectedPerson&&hasAssignedZones?'Zona tanggung jawab tercapai':'Zona tercapai';
+  document.getElementById('zonesDone').textContent=progressCalc.completed.size.toLocaleString('id-ID');
+  document.getElementById('zonesLeftLabel').textContent='Sisa zona';
+  document.getElementById('zonesLeftHint').textContent='Belum mencapai target sampel';
+  document.getElementById('zonesLeft').textContent=Math.max(0,progressCalc.zoneCount-progressCalc.completed.size).toLocaleString('id-ID');
+  document.getElementById('zonesRatio').textContent=!allGeo?'Polygon belum dimuat':selectedPerson&&hasAssignedZones?`dari ${progressCalc.zoneCount.toLocaleString('id-ID')} zona tanggung jawab • sampel semua surveyor dihitung`:`dari ${progressCalc.zoneCount.toLocaleString('id-ID')} zona keseluruhan`;
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent='Semua tanggal';
   const sampleTarget=calc.zoneCount*threshold;
   const sampleProgress=sampleTarget?Math.min(100,Math.round(points.length/sampleTarget*100)):0;
   document.getElementById('sampleProgressPercent').textContent=`${sampleProgress}%`;
   document.getElementById('sampleProgressHint').textContent=`${points.length.toLocaleString('id-ID')} dari ${sampleTarget.toLocaleString('id-ID')} target sampel`;
-  const pct=zoneCalc.zoneCount?Math.round(zoneCalc.completed.size/zoneCalc.zoneCount*100):0;
+  const pct=progressCalc.zoneCount?Math.round(progressCalc.completed.size/progressCalc.zoneCount*100):0;
   document.getElementById('progressPercent').textContent=`${pct}%`;
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
   document.getElementById('surveyorHint').textContent=selectedPerson||'Pada kabupaten terpilih';
-  document.getElementById('progressHint').textContent=`Target tetap ${threshold} sampel per zona`;
+  document.getElementById('progressHint').textContent=selectedPerson&&hasAssignedZones?`Sampel semua surveyor dihitung untuk zona tanggung jawab ${selectedPerson}`:`Target tetap ${threshold} sampel per zona`;
   // Daily zone awards use the complete dataset even when the map's surveyor
   // filter is active; otherwise each surveyor would be incorrectly evaluated
   // as if they had collected every sample alone.
   const awardCalc=zoneCalc;
   const awardDates=allDates(source);
-  const awardPeople=unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
+  const awardOwners=[...awardCalc.awards.keys()].map(key=>key.split('\u0000')[1]).filter(person=>person&&person!=='Kolaborasi');
+  const awardPeople=unique([...source.map(r=>r.surveyor),...awardOwners]).sort((a,b)=>a.localeCompare(b,'id'));
   const hasCollaboration=[...awardCalc.awards.keys()].some(k=>k.endsWith('\u0000Kolaborasi'));
-  const displayedZonePeople=unique([...awardPeople,...(hasCollaboration?['Kolaborasi']:[])]);
+  const displayedZonePeople=selectedPerson?[selectedPerson]:unique([...awardPeople,...(hasCollaboration?['Kolaborasi']:[])]);
   renderTable('zoneTable','zona',awardDates,displayedZonePeople,(d,p)=>awardCalc.awards.get(`${d}\u0000${p}`));
   const sampleCounts=new Map();
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
