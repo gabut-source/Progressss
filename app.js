@@ -421,7 +421,7 @@ function calculate(rows, threshold, knownZones=null) {
     const samples=byZone.get(zk),sampleKey=keyOf(r),existing=samples.get(sampleKey);
     if(!existing||r.date<existing.date)samples.set(sampleKey,r);
   }
-  const completed=new Set(); const awards=new Map(); const zoneAwardsByZone=new Map(); const zoneSampleCounts=new Map(); const zoneSurveyorCounts=new Map();
+  const completed=new Set(); const awards=new Map(); const zoneAwardsByZone=new Map(); const zoneSampleCounts=new Map(); const zoneSurveyorCounts=new Map(); const zoneSampleNumbers=new Map();
   for (const [zone, uniqueSamples] of byZone) {
     const byDay=new Map();
     for(const row of uniqueSamples.values()){
@@ -430,11 +430,15 @@ function calculate(rows, threshold, knownZones=null) {
     }
     zoneSampleCounts.set(zone,uniqueSamples.size);
     const surveyorCounts=new Map();
+    const sampleNumbers=[];
     for(const row of uniqueSamples.values()){
       const surveyor=text(row.surveyor)||'Tidak diketahui';
       surveyorCounts.set(surveyor,(surveyorCounts.get(surveyor)||0)+1);
+      const sample=text(row.sample);
+      if(sample&&!sampleNumbers.includes(sample))sampleNumbers.push(sample);
     }
     zoneSurveyorCounts.set(zone,surveyorCounts);
+    zoneSampleNumbers.set(zone,sampleNumbers.sort((a,b)=>a.localeCompare(b,'id',{numeric:true,sensitivity:'base'})));
     let total=0; let already=false;
     for (const [day, samples] of [...byDay.entries()].sort((a,b)=>a[0].localeCompare(b[0]))) {
       if (!already && total + samples.size >= threshold) {
@@ -454,7 +458,7 @@ function calculate(rows, threshold, knownZones=null) {
       total += samples.size;
     }
   }
-  return {completed, awards, zoneAwardsByZone, zoneSampleCounts, zoneSurveyorCounts, zoneCount:knownZones ? knownZones.size : byZone.size};
+  return {completed, awards, zoneAwardsByZone, zoneSampleCounts, zoneSurveyorCounts, zoneSampleNumbers, zoneCount:knownZones ? knownZones.size : byZone.size};
 }
 
 function reattributeZoneAwards(calculation,geo){
@@ -504,7 +508,8 @@ function renderZoneSampleList(geo, calculation) {
     button.textContent=`${label}${zoneListSort.key===key?(zoneListSort.direction==='asc'?' ↑':' ↓'):' ↕'}`;th.append(button);headRow.append(th);
   }
   const ownerHeader=document.createElement('th');ownerHeader.textContent='Pemilik zona saat ini';headRow.append(ownerHeader);
-  const contributorsHeader=document.createElement('th');contributorsHeader.textContent='Kontribusi sampel per surveyor';headRow.append(contributorsHeader);
+  const contributorsHeader=document.createElement('th');contributorsHeader.textContent='Kontribusi sampel per surveyor (akibat perubahan zona)';headRow.append(contributorsHeader);
+  const samplesHeader=document.createElement('th');samplesHeader.textContent='Nomor sampel';headRow.append(samplesHeader);
   thead.append(headRow);table.append(thead);
   const tbody=document.createElement('tbody');
   const features=(geo?.features||[]).filter(feature=>featureZone(feature)!=null);
@@ -534,9 +539,12 @@ function renderZoneSampleList(geo, calculation) {
     const contributorsCell=document.createElement('td');
     const contributions=[...(calculation.zoneSurveyorCounts.get(id)||new Map())].sort((a,b)=>a[0].localeCompare(b[0],'id'));
     contributorsCell.textContent=contributions.length?contributions.map(([name,n])=>`${name}: ${n}`).join(' • '):'Belum ada sampel';
-    row.append(zoneCell,countCell,statusCell,ownerCell,contributorsCell);tbody.append(row);
+    const samplesCell=document.createElement('td');
+    const sampleNumbers=calculation.zoneSampleNumbers.get(id)||[];
+    samplesCell.textContent=sampleNumbers.length?sampleNumbers.join(', '):'—';
+    row.append(zoneCell,countCell,statusCell,ownerCell,contributorsCell,samplesCell);tbody.append(row);
   }
-  if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=5;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
+  if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=6;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
   table.append(tbody);
 }
 
@@ -749,7 +757,7 @@ function downloadAchievementWorkbook(){
   const zoneSampleSheet=XLSX.utils.aoa_to_sheet(zoneSampleReportData());
   const zoneSheet=XLSX.utils.aoa_to_sheet(reportTableData('zoneTable'));
   const sampleSheet=XLSX.utils.aoa_to_sheet(reportTableData('sampleTable'));
-  zoneSampleSheet['!cols']=[{wch:20},{wch:18},{wch:20},{wch:28},{wch:48}];
+  zoneSampleSheet['!cols']=[{wch:20},{wch:18},{wch:20},{wch:28},{wch:48},{wch:36}];
   zoneSheet['!cols']=[{wch:24},...Array(Math.max(0,(zoneSheet['!ref']?XLSX.utils.decode_range(zoneSheet['!ref']).e.c:0))).fill({wch:14})];
   sampleSheet['!cols']=[{wch:24},...Array(Math.max(0,(sampleSheet['!ref']?XLSX.utils.decode_range(sampleSheet['!ref']).e.c:0))).fill({wch:14})];
   XLSX.utils.book_append_sheet(workbook,zoneSampleSheet,'Jumlah Sampel Zona');
