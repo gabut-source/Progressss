@@ -421,12 +421,7 @@ function calculate(rows, threshold, knownZones=null) {
     const samples=byZone.get(zk),sampleKey=keyOf(r),existing=samples.get(sampleKey);
     if(!existing||r.date<existing.date)samples.set(sampleKey,r);
   }
-  const completed=new Set(); const awards=new Map(); const zoneAwardsByZone=new Map(); const zoneSampleCounts=new Map(); const individualZones=new Set();
-  for(const row of rows){
-    if(!row.zone)continue;
-    const kind=propertyValue(row.properties,['JENIS_DATA','JENISDATA']);
-    if(kind!=null&&normalizedField(kind)==='individual')individualZones.add(idKey(row.zone));
-  }
+  const completed=new Set(); const awards=new Map(); const zoneAwardsByZone=new Map(); const zoneSampleCounts=new Map(); const zoneSurveyorCounts=new Map();
   for (const [zone, uniqueSamples] of byZone) {
     const byDay=new Map();
     for(const row of uniqueSamples.values()){
@@ -434,6 +429,12 @@ function calculate(rows, threshold, knownZones=null) {
       byDay.get(row.date).set(keyOf(row),row);
     }
     zoneSampleCounts.set(zone,uniqueSamples.size);
+    const surveyorCounts=new Map();
+    for(const row of uniqueSamples.values()){
+      const surveyor=text(row.surveyor)||'Tidak diketahui';
+      surveyorCounts.set(surveyor,(surveyorCounts.get(surveyor)||0)+1);
+    }
+    zoneSurveyorCounts.set(zone,surveyorCounts);
     let total=0; let already=false;
     for (const [day, samples] of [...byDay.entries()].sort((a,b)=>a[0].localeCompare(b[0]))) {
       if (!already && total + samples.size >= threshold) {
@@ -453,7 +454,7 @@ function calculate(rows, threshold, knownZones=null) {
       total += samples.size;
     }
   }
-  return {completed, awards, zoneAwardsByZone, zoneSampleCounts, individualZones, zoneCount:knownZones ? knownZones.size : byZone.size};
+  return {completed, awards, zoneAwardsByZone, zoneSampleCounts, zoneSurveyorCounts, zoneCount:knownZones ? knownZones.size : byZone.size};
 }
 
 function reattributeZoneAwards(calculation,geo){
@@ -496,30 +497,31 @@ function renderZoneSampleList(geo, calculation) {
   table.replaceChildren();
   const thead=document.createElement('thead');
   const headRow=document.createElement('tr');
-  const sortColumns=[['zone','Zona (NOZN)'],['count','Jumlah sampel'],['status','Status'],['individual','Individual']];
+  const sortColumns=[['zone','Zona (NOZN)'],['count','Jumlah sampel'],['status','Status']];
   for(const [key,label] of sortColumns){
     const th=document.createElement('th');th.setAttribute('aria-sort',zoneListSort.key===key?(zoneListSort.direction==='asc'?'ascending':'descending'):'none');
     const button=document.createElement('button');button.type='button';button.className='zone-sort-button';button.dataset.zoneSort=key;
     button.textContent=`${label}${zoneListSort.key===key?(zoneListSort.direction==='asc'?' ↑':' ↓'):' ↕'}`;th.append(button);headRow.append(th);
   }
-  const creditHeader=document.createElement('th');creditHeader.textContent='Dihitung untuk pemilik';headRow.append(creditHeader);
+  const ownerHeader=document.createElement('th');ownerHeader.textContent='Pemilik zona saat ini';headRow.append(ownerHeader);
+  const contributorsHeader=document.createElement('th');contributorsHeader.textContent='Kontribusi sampel per surveyor';headRow.append(contributorsHeader);
   thead.append(headRow);table.append(thead);
   const tbody=document.createElement('tbody');
   const features=(geo?.features||[]).filter(feature=>featureZone(feature)!=null);
   const zones=new Map();
-  for(const feature of features){const value=String(featureZone(feature));const id=idKey(value);if(!zones.has(id))zones.set(id,value);}
-  const compareZone=(a,b)=>a[1].localeCompare(b[1],'id',{numeric:true,sensitivity:'base'});
+  for(const feature of features){const value=String(featureZone(feature));const id=idKey(value);if(!zones.has(id))zones.set(id,{value,feature});}
+  const compareZone=(a,b)=>a[1].value.localeCompare(b[1].value,'id',{numeric:true,sensitivity:'base'});
   const ordered=[...zones.entries()].sort((a,b)=>{
     let comparison=0;
     if(zoneListSort.key==='count')comparison=(calculation.zoneSampleCounts.get(a[0])||0)-(calculation.zoneSampleCounts.get(b[0])||0);
     else if(zoneListSort.key==='status')comparison=Number((calculation.zoneSampleCounts.get(a[0])||0)>=TARGET_SAMPLES_PER_ZONE)-Number((calculation.zoneSampleCounts.get(b[0])||0)>=TARGET_SAMPLES_PER_ZONE);
-    else if(zoneListSort.key==='individual')comparison=Number(calculation.individualZones.has(a[0]))-Number(calculation.individualZones.has(b[0]));
     else comparison=compareZone(a,b);
     if(!comparison&&zoneListSort.key!=='zone')comparison=compareZone(a,b);
     return comparison*(zoneListSort.direction==='asc'?1:-1);
   });
   hint.textContent=`${ordered.length.toLocaleString('id-ID')} zona • Target 3 sampel per zona • Klik baris untuk zoom ke peta.`;
-  for(const [id,value] of ordered){
+  for(const [id,zoneInfo] of ordered){
+    const {value,feature}=zoneInfo;
     const count=calculation.zoneSampleCounts.get(id)||0;
     const done=count>=TARGET_SAMPLES_PER_ZONE;
     const row=document.createElement('tr');
@@ -527,9 +529,12 @@ function renderZoneSampleList(geo, calculation) {
     const button=document.createElement('button');button.type='button';button.className='zone-link';button.dataset.zoneId=id;button.textContent=`Zona ${value}`;button.setAttribute('aria-label',`Zoom ke zona ${value}, ${count} sampel`);zoneCell.append(button);
     const countCell=document.createElement('td');countCell.textContent=count.toLocaleString('id-ID');
     const statusCell=document.createElement('td');statusCell.textContent=done?'Tercapai':'Belum tercapai';statusCell.className=done?'zone-done':'zone-pending';
-    const individualCell=document.createElement('td');const hasIndividual=calculation.individualZones.has(id);individualCell.textContent=hasIndividual?'Ya':'Tidak';individualCell.className=hasIndividual?'zone-done':'zone-no';
-    const creditCell=document.createElement('td');const credit=calculation.zoneAwardsByZone?.get(id);creditCell.textContent=credit?`${credit.surveyor} • ${fmtDate(credit.date)}`:'—';
-    row.append(zoneCell,countCell,statusCell,individualCell,creditCell);tbody.append(row);
+    const owners=unique(feature?.properties?._zone_surveyors||[]);
+    const ownerCell=document.createElement('td');ownerCell.textContent=owners.length===1?owners[0]:owners.length>1?`Kolaborasi: ${owners.join(', ')}`:'Belum ditetapkan';
+    const contributorsCell=document.createElement('td');
+    const contributions=[...(calculation.zoneSurveyorCounts.get(id)||new Map())].sort((a,b)=>a[0].localeCompare(b[0],'id'));
+    contributorsCell.textContent=contributions.length?contributions.map(([name,n])=>`${name}: ${n}`).join(' • '):'Belum ada sampel';
+    row.append(zoneCell,countCell,statusCell,ownerCell,contributorsCell);tbody.append(row);
   }
   if(!ordered.length){const row=document.createElement('tr');const cell=document.createElement('td');cell.colSpan=5;cell.textContent='Polygon zona belum tersedia atau atribut NOZN tidak ditemukan.';row.append(cell);tbody.append(row);}
   table.append(tbody);
@@ -744,7 +749,7 @@ function downloadAchievementWorkbook(){
   const zoneSampleSheet=XLSX.utils.aoa_to_sheet(zoneSampleReportData());
   const zoneSheet=XLSX.utils.aoa_to_sheet(reportTableData('zoneTable'));
   const sampleSheet=XLSX.utils.aoa_to_sheet(reportTableData('sampleTable'));
-  zoneSampleSheet['!cols']=[{wch:20},{wch:18},{wch:20},{wch:16}];
+  zoneSampleSheet['!cols']=[{wch:20},{wch:18},{wch:20},{wch:28},{wch:48}];
   zoneSheet['!cols']=[{wch:24},...Array(Math.max(0,(zoneSheet['!ref']?XLSX.utils.decode_range(zoneSheet['!ref']).e.c:0))).fill({wch:14})];
   sampleSheet['!cols']=[{wch:24},...Array(Math.max(0,(sampleSheet['!ref']?XLSX.utils.decode_range(sampleSheet['!ref']).e.c:0))).fill({wch:14})];
   XLSX.utils.book_append_sheet(workbook,zoneSampleSheet,'Jumlah Sampel Zona');
