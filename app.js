@@ -804,11 +804,12 @@ function update() {
   document.getElementById('sampleCount').textContent=points.length.toLocaleString('id-ID');
   document.getElementById('samplePeriod').textContent='Semua tanggal';
   const sampleTarget=calc.zoneCount*threshold;
-  const sampleProgress=sampleTarget?Math.min(100,Math.round(points.length/sampleTarget*100)):0;
-  document.getElementById('sampleProgressPercent').textContent=`${sampleProgress}%`;
+  const sampleProgress=sampleTarget?Math.min(100,points.length/sampleTarget*100):0;
+  const formatPercent=value=>`${value.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}%`;
+  document.getElementById('sampleProgressPercent').textContent=formatPercent(sampleProgress);
   document.getElementById('sampleProgressHint').textContent=`${points.length.toLocaleString('id-ID')} dari ${sampleTarget.toLocaleString('id-ID')} target sampel`;
-  const pct=progressCalc.zoneCount?Math.round(progressCalc.completed.size/progressCalc.zoneCount*100):0;
-  document.getElementById('progressPercent').textContent=`${pct}%`;
+  const pct=progressCalc.zoneCount?progressCalc.completed.size/progressCalc.zoneCount*100:0;
+  document.getElementById('progressPercent').textContent=formatPercent(pct);
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
   document.getElementById('surveyorHint').textContent=selectedPerson||'Pada kabupaten terpilih';
   document.getElementById('progressHint').textContent=selectedPerson&&hasAssignedZones?`Sampel semua surveyor dihitung untuk zona tanggung jawab ${selectedPerson}`:`Target tetap ${threshold} sampel per zona`;
