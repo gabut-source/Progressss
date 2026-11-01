@@ -15,7 +15,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
-const THEME_COLORS={primary:'#1746A2',secondary:'#C8102E',light:'#7FA6E8',pale:'#DCE7FA'};
+const THEME_COLORS={primary:'#38BDF8',secondary:'#2DD4BF',light:'#FBBF24',pale:'#1E293B',sample:'#FB7185',individual:'#A78BFA',otherSurveyor:'#F472B6'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -719,7 +719,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor=''){
     const kind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
-    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#fff',weight:1,fillColor:isOtherSurveyor?'#EC4899':isIndividual?THEME_COLORS.primary:THEME_COLORS.secondary,fillOpacity:.95});
+    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#0B1020',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
     if(map.getZoom()>=14&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
       const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
@@ -812,10 +812,10 @@ function update() {
   document.getElementById('surveyorCount').textContent=selectedPerson?'1':unique(source.map(r=>r.surveyor)).length;
   document.getElementById('surveyorHint').textContent=selectedPerson||'Pada kabupaten terpilih';
   document.getElementById('progressHint').textContent=selectedPerson&&hasAssignedZones?`Sampel semua surveyor dihitung untuk zona tanggung jawab ${selectedPerson}`:`Target tetap ${threshold} sampel per zona`;
-  // Daily zone awards use the complete dataset even when the map's surveyor
-  // filter is active; otherwise each surveyor would be incorrectly evaluated
-  // as if they had collected every sample alone.
-  const awardCalc=zoneCalc;
+  // Daily achievement history stays with the surveyor(s) whose samples first
+  // brought the zone to the target. Current-owner progress is calculated
+  // separately above from the latest zone assignment and all surveyor samples.
+  const awardCalc=sampleCalc;
   const awardDates=allDates(source);
   const awardOwners=[...awardCalc.awards.keys()].map(key=>key.split('\u0000')[1]).filter(person=>person&&person!=='Kolaborasi');
   const awardPeople=unique([...source.map(r=>r.surveyor),...awardOwners]).sort((a,b)=>a.localeCompare(b,'id'));
