@@ -285,13 +285,13 @@ body,body.bg-calm-50{background:#FFF0BE}
 .button.primary{background:#FF9A86}
 .button.primary:hover{background:#FF9A86}
 .button.secondary{background:#FFD6A6}
-.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{position:relative;transition:transform .24s ease,box-shadow .24s ease,border-color .24s ease}
-.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{overflow:visible}
-.button:hover,.kpi:hover,.filters:hover,.admin-panel:hover,.table-panel:hover,.report-toolbar:hover{transform:translateY(-3px) scale(1.01);border-color:#FF9A86;box-shadow:0 12px 30px rgba(255,154,134,.42),0 0 18px rgba(255,179,153,.38)}
-.button:hover::before,.kpi:hover::before,.filters:hover::before,.admin-panel:hover::before,.table-panel:hover::before,.report-toolbar:hover::before{content:"✧  ♥  ✦";position:absolute;z-index:8;top:-14px;left:10px;color:#A64F48;font-size:18px;letter-spacing:5px;pointer-events:none;white-space:nowrap;text-shadow:0 0 6px #FFF0BE,0 0 14px #FF9A86;animation:hover-sparkles-left .72s ease-in-out infinite alternate}
-.button:hover::after,.kpi:hover::after,.filters:hover::after,.admin-panel:hover::after,.table-panel:hover::after,.report-toolbar:hover::after{content:"★  ✦  ♡  ✧  ♥  ✦";position:absolute;z-index:8;top:-14px;right:10px;color:#A64F48;font-size:18px;letter-spacing:4px;pointer-events:none;white-space:nowrap;text-shadow:0 0 6px #FFF0BE,0 0 14px #FF9A86;animation:hover-sparkles-right .65s ease-in-out infinite alternate}
-.button:hover::before,.button:hover::after{top:-15px;font-size:15px;letter-spacing:2px}
-.admin-panel:hover::before,.admin-panel:hover::after,.table-panel:hover::before,.table-panel:hover::after{top:5px}
-@keyframes hover-sparkles-left{from{opacity:.35;transform:translate(-5px,5px) scale(.68) rotate(-16deg)}to{opacity:1;transform:translate(4px,-4px) scale(1.2) rotate(12deg)}}
-@keyframes hover-sparkles-right{from{opacity:.3;transform:translate(5px,4px) scale(.65) rotate(14deg)}to{opacity:1;transform:translate(-4px,-5px) scale(1.25) rotate(-12deg)}}
-@media(prefers-reduced-motion:reduce){.button,.kpi,.filters,.admin-panel,.table-panel,.report-toolbar{transition:none}.button:hover,.kpi:hover,.filters:hover,.admin-panel:hover,.table-panel:hover,.report-toolbar:hover{transform:none}.button:hover::before,.button:hover::after,.kpi:hover::before,.kpi:hover::after,.filters:hover::before,.filters:hover::after,.admin-panel:hover::before,.admin-panel:hover::after,.table-panel:hover::before,.table-panel:hover::after,.report-toolbar:hover::before,.report-toolbar:hover::after{animation:none}}
+.button{z-index:0}
+.button:hover{z-index:2;transform:translateY(-1px);box-shadow:0 5px 14px rgba(166,79,72,.24)}
+.button:hover::before,.button:hover::after{position:absolute;z-index:3;top:-8px;color:#A64F48;font-size:12px;letter-spacing:2px;pointer-events:none;white-space:nowrap;text-shadow:0 0 5px #FFF0BE,0 0 9px #FF9A86;animation:button-sparkle .8s ease-in-out infinite alternate}
+.button:hover::before{content:"✦ ♡";left:3px}
+.button:hover::after{content:"✧ ♥ ✦";right:3px;animation-delay:.18s}
+.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{transition:box-shadow .2s ease,border-color .2s ease}
+.filters:hover,.kpi:hover,.admin-panel:hover,.table-panel:hover,.report-toolbar:hover{border-color:#FFB399;box-shadow:0 6px 16px rgba(166,79,72,.12)}
+.admin-panel,.table-panel{overflow:hidden}
+@keyframes button-sparkle{from{opacity:.45;transform:translateY(2px) scale(.9) rotate(-4deg)}to{opacity:1;transform:translateY(-2px) scale(1.08) rotate(4deg)}}
+@media(prefers-reduced-motion:reduce){.button,.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{transition:none}.button:hover{transform:none}.button:hover::before,.button:hover::after{animation:none}}
