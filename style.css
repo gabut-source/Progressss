@@ -275,3 +275,20 @@ td.positive{color:#A64F48}
 .leaflet-control-attribution{background:rgba(255,240,190,.9)!important;color:var(--warm-muted)}
 .leaflet-tooltip.sample-number-label{background:rgba(255,240,190,.96);color:var(--warm-ink);box-shadow:0 2px 8px rgba(74,53,48,.3)}
 footer{color:var(--warm-muted)}
+
+/* Solid warm palette with hover-only hearts and star sparkles. */
+body,body.bg-calm-50{background:#FFF0BE}
+.topbar{background:#FFB399}
+.filters,.kpi,.map-panel,.table-panel,.admin-panel,.report-toolbar{background:#FFD6A6}
+.kpi:nth-child(n){background:#FFD6A6}
+.button{position:relative;overflow:visible;transition:transform .22s ease,box-shadow .22s ease,background-color .22s ease}
+.button.primary{background:#FF9A86}
+.button.primary:hover{background:#FF9A86}
+.button.secondary{background:#FFD6A6}
+.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{position:relative;transition:transform .24s ease,box-shadow .24s ease,border-color .24s ease}
+.button:hover,.kpi:hover,.filters:hover,.admin-panel:hover,.table-panel:hover,.report-toolbar:hover{transform:translateY(-2px);border-color:#FF9A86;box-shadow:0 9px 22px rgba(138,42,120,.2)}
+.button:hover::after,.kpi:hover::after,.filters:hover::after,.admin-panel:hover::after,.table-panel:hover::after,.report-toolbar:hover::after{content:"✦  ♡  ✧  ♥  ✦";position:absolute;z-index:5;top:-13px;right:12px;color:#8A2A78;font-size:14px;letter-spacing:3px;pointer-events:none;white-space:nowrap;text-shadow:0 0 7px rgba(255,154,134,.8);animation:hover-sparkles .9s ease-in-out infinite alternate}
+.button:hover::after{top:-12px;right:7px;font-size:12px}
+.admin-panel:hover::after,.table-panel:hover::after{top:6px}
+@keyframes hover-sparkles{from{opacity:.45;transform:translateY(3px) scale(.88) rotate(-3deg)}to{opacity:1;transform:translateY(-3px) scale(1.08) rotate(3deg)}}
+@media(prefers-reduced-motion:reduce){.button,.kpi,.filters,.admin-panel,.table-panel,.report-toolbar{transition:none}.button:hover,.kpi:hover,.filters:hover,.admin-panel:hover,.table-panel:hover,.report-toolbar:hover{transform:none}.button:hover::after,.kpi:hover::after,.filters:hover::after,.admin-panel:hover::after,.table-panel:hover::after,.report-toolbar:hover::after{animation:none}}
