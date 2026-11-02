@@ -215,3 +215,63 @@ td.positive{color:var(--night-teal)}
 .leaflet-control-attribution{background:rgba(41,0,68,.9)!important;color:#EEE3B0}
 .leaflet-tooltip.sample-number-label{background:rgba(41,0,68,.96);color:#EEE3B0;box-shadow:0 2px 8px rgba(0,0,0,.55)}
 footer{color:#EEE3B0}
+
+/* Warm palette from Color Hunt: coral, peach, apricot, and cream. */
+:root{color-scheme:light;--warm-coral:#FF9A86;--warm-peach:#FFB399;--warm-apricot:#FFD6A6;--warm-cream:#FFF0BE;--warm-ink:#4A3530;--warm-muted:#765B54;color:var(--warm-ink);background:var(--warm-cream)}
+body,body.bg-calm-50{color:var(--warm-ink);background:radial-gradient(ellipse at 8% 0%,rgba(255,154,134,.3),transparent 35%),radial-gradient(ellipse at 96% 8%,rgba(255,179,153,.36),transparent 33%),var(--warm-cream)}
+body.text-slate-800{color:var(--warm-ink)}
+.topbar{background:rgba(255,179,153,.96);border-bottom-color:var(--warm-peach);box-shadow:0 8px 28px rgba(115,70,55,.12)}
+.topbar h1,.section-heading h2{color:var(--warm-ink)}
+.eyebrow,.admin-city-note strong,.status-line strong{color:#A64F48}
+.subtitle,.section-heading p,.map-note,.legend,.filters label,.admin-login label,.admin-city-note,.admin-help{color:var(--warm-muted)}
+.filters,.kpi,.map-panel,.table-panel,.admin-panel,.report-toolbar{background:linear-gradient(145deg,#FFF0BE,#FFD6A6);border-color:var(--warm-peach);box-shadow:0 10px 26px rgba(115,70,55,.1)}
+.kpi:nth-child(n){background:linear-gradient(145deg,#FFF0BE,#FFD6A6)}
+.kpi span,.kpi small{color:var(--warm-muted)}
+.kpi strong{color:var(--warm-ink)}
+.button{background:#FFD6A6;border-color:var(--warm-peach);color:var(--warm-ink);box-shadow:0 2px 8px rgba(115,70,55,.1)}
+.button:hover{background:#FFB399;border-color:#FF9A86;color:#4A3530}
+.button.primary{background:linear-gradient(135deg,#FF9A86,#FFB399);border-color:#FF9A86;color:#4A3530}
+.button.primary:hover{background:linear-gradient(135deg,#FF8B75,#FFA487);color:#4A3530}
+.button.secondary{background:#FFD6A6}
+.filters select,.filters input,.admin-login input{background:#FFF0BE;border-color:var(--warm-peach);color:var(--warm-ink)}
+.filters select:focus,.filters input:focus,.admin-login input:focus{outline:none;border-color:var(--warm-coral);box-shadow:0 0 0 3px rgba(255,154,134,.22)}
+.admin-login [role="status"]{color:#A64F48}
+.admin-help code{background:#FFB399;color:var(--warm-ink)}
+.table-wrap{scrollbar-color:#FF9A86 #FFF0BE}
+table{color:var(--warm-ink)}
+th,td{border-color:#FFB399}
+th,th:first-child{background:#FFB399;color:var(--warm-ink)}
+td:first-child{background:#FFF0BE;color:var(--warm-ink)}
+tbody tr:nth-child(even) td{background:#FFD6A6}
+tbody tr:nth-child(even) td:first-child{background:#FFB399}
+td.zero{color:#765B54}
+td.positive{color:#A64F48}
+.zone-done{color:#4A3530;background:rgba(255,154,134,.48)}
+.zone-pending{color:#4A3530;background:rgba(255,214,166,.75)}
+.zone-no{color:#4A3530;background:#FFD6A6}
+.zone-link,.zone-sort-button{color:#A64F48}
+.zone-link:hover,.zone-sort-button:hover{color:#8C3F55}
+.status-line[data-loading="true"]::before{border-color:#FFD6A6;border-top-color:#FF9A86}
+.sample-dot{background:#FF9A86}
+.individual-dot{background:#FFD6A6;border:1px solid #A64F48}
+.other-surveyor-dot{background:#FFB399}
+.swatch.done{background:#FF9A86}
+.swatch.pending{background:#FFD6A6}
+.map-note{border-top-color:var(--warm-peach)}
+.zone-upload-dialog{background:#FFF0BE;border-color:var(--warm-peach);color:var(--warm-ink)}
+.zone-upload-dialog p,.set-password-intro{color:var(--warm-muted)}
+.zone-upload-dialog::backdrop{background:rgba(74,53,48,.4);backdrop-filter:blur(4px)}
+.set-password-form input[readonly]{background:#FFD6A6;color:var(--warm-ink)}
+.locate-control{border-color:var(--warm-peach);background:#FFF0BE;box-shadow:0 3px 10px rgba(74,53,48,.2)}
+.locate-button{background:#FFF0BE;color:#A64F48}
+.locate-button:hover{background:#FFD6A6}
+.locate-button:focus-visible{outline-color:var(--warm-coral)}
+.user-location-marker span{border-color:#FFF0BE;background:#FF9A86;box-shadow:0 0 0 6px rgba(255,154,134,.25),0 1px 6px rgba(74,53,48,.35)}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#FFF0BE;color:var(--warm-ink)}
+.leaflet-popup-content-wrapper{border:1px solid var(--warm-peach);box-shadow:0 10px 28px rgba(74,53,48,.2)}
+.leaflet-container a{color:#A64F48}
+.leaflet-control-zoom a{background:#FFF0BE;color:var(--warm-ink);border-color:var(--warm-peach)}
+.leaflet-control-zoom a:hover{background:#FFD6A6;color:var(--warm-ink)}
+.leaflet-control-attribution{background:rgba(255,240,190,.9)!important;color:var(--warm-muted)}
+.leaflet-tooltip.sample-number-label{background:rgba(255,240,190,.96);color:var(--warm-ink);box-shadow:0 2px 8px rgba(74,53,48,.3)}
+footer{color:var(--warm-muted)}

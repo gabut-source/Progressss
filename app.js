@@ -15,7 +15,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
-const THEME_COLORS={primary:'#EEE3B0',secondary:'#8A2A78',light:'#EEE3B0',pale:'#500071',sample:'#8A2A78',individual:'#EEE3B0',otherSurveyor:'#500071'};
+const THEME_COLORS={primary:'#FF9A86',secondary:'#FFB399',light:'#FFD6A6',pale:'#FFF0BE',sample:'#FF9A86',individual:'#FFD6A6',otherSurveyor:'#FFB399'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -719,7 +719,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor=''){
     const kind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
-    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#EEE3B0',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
+    const marker=L.circleMarker([Number(r.lat),Number(r.lon)],{radius:5,color:'#4A3530',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
     if(map.getZoom()>=14&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
       const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
