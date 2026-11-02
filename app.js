@@ -15,7 +15,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
-const THEME_COLORS={primary:'#C4B5FD',secondary:'#34D399',light:'#FBBF24',pale:'#241B38',sample:'#FB7185',individual:'#A78BFA',otherSurveyor:'#F472B6'};
+const THEME_COLORS={primary:'#E9D5FF',secondary:'#A78BFA',light:'#6D5BD0',pale:'#241B38',sample:'#A855F7',individual:'#DDD6FE',otherSurveyor:'#7C3AED'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
