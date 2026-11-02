@@ -295,3 +295,11 @@ body,body.bg-calm-50{background:#FFF0BE}
 .admin-panel,.table-panel{overflow:hidden}
 @keyframes button-sparkle{from{opacity:.45;transform:translateY(2px) scale(.9) rotate(-4deg)}to{opacity:1;transform:translateY(-2px) scale(1.08) rotate(4deg)}}
 @media(prefers-reduced-motion:reduce){.button,.filters,.kpi,.admin-panel,.table-panel,.report-toolbar{transition:none}.button:hover{transform:none}.button:hover::before,.button:hover::after{animation:none}}
+
+/* Keep wide date/surveyor tables inside their panel instead of widening the page. */
+.tables-grid{grid-template-columns:minmax(0,1fr);min-width:0;width:100%}
+.table-panel{min-width:0;width:100%;max-width:100%}
+.table-panel .section-heading,.table-panel .section-heading>div,.table-wrap{min-width:0;max-width:100%}
+.table-wrap{width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.table-panel .section-heading p{white-space:normal;overflow-wrap:anywhere}
+.table-panel table{width:max-content;min-width:100%}
