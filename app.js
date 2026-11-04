@@ -598,8 +598,9 @@ function renderZoneSampleList(geo, calculation) {
     const count=calculation.zoneSampleCounts.get(id)||0;
     const done=count>=TARGET_SAMPLES_PER_ZONE;
     const row=document.createElement('tr');
+    row.dataset.zoneId=id;row.className='zone-click-row';row.tabIndex=0;row.title=`Klik untuk zoom ke zona ${value}`;
     const zoneCell=document.createElement('td');
-    const button=document.createElement('button');button.type='button';button.className='zone-link';button.dataset.zoneId=id;button.textContent=`Zona ${value}`;button.setAttribute('aria-label',`Zoom ke zona ${value}, ${count} sampel`);zoneCell.append(button);
+    zoneCell.textContent=`Zona ${value}`;
     const countCell=document.createElement('td');countCell.textContent=count.toLocaleString('id-ID');
     const statusCell=document.createElement('td');statusCell.textContent=done?'Tercapai':'Belum tercapai';statusCell.className=done?'zone-done':'zone-pending';
     const owners=unique(feature?.properties?._zone_surveyors||[]);
@@ -815,6 +816,7 @@ function zoneSampleReportData(){
     if(sortButton)return sortButton.textContent.replace(/[↑↓↕]/g,'').trim();
     const zoneButton=cell.querySelector('button[data-zone-id]');
     if(zoneButton)return zoneButton.textContent.replace(/^Zona\s+/,'');
+    if(rowIndex>0&&columnIndex===0)return cell.textContent.replace(/^Zona\s+/, '');
     if(rowIndex>0&&columnIndex===1)return Number(cell.textContent)||0;
     return cell.textContent;
   }));
@@ -1140,7 +1142,7 @@ displayGeoInput.addEventListener('change',async event=>{
     setLoadingStatus('Menyimpan GeoJSON tampilan tanpa mengganti zona sumber…');await browserPaint();
     await saveDisplayGeo(city,displayGeo);
     shouldFit=true;rebuildFilters();update();
-    statusLine.innerHTML=`GeoJSON tampilan untuk <strong>${escapeHtml(city)}</strong> berhasil disimpan: ${displayGeo.features.length.toLocaleString('id-ID')} polygon. Zona lengkap dan perhitungan tidak diganti.`;
+    statusLine.textContent='GeoJSON tampilan berhasil disimpan.';
   }catch(error){
     const detail=describeUploadError(error);statusLine.textContent=`GeoJSON tampilan gagal disimpan: ${detail}`;alert(`GeoJSON tampilan gagal disimpan: ${detail}`);
   }finally{endLoading();event.target.value='';}
@@ -1159,8 +1161,13 @@ document.getElementById('zoneSampleTable').addEventListener('click',event=>{
     const allGeo=citySelect.value==='ALL'?combinedDistrictGeo():zoneDataForCity(citySelect.value);
     renderZoneSampleList(geoForSurveyor(allGeo,surveyorSelect.value),currentCalculation);return;
   }
-  const button=event.target.closest('button[data-zone-id]');
-  if(button)zoomToZone(button.dataset.zoneId);
+  const row=event.target.closest('tr[data-zone-id]');
+  if(row)zoomToZone(row.dataset.zoneId);
+});
+document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
+  if(event.key!=='Enter'&&event.key!==' ')return;
+  const row=event.target.closest('tr[data-zone-id]');
+  if(row){event.preventDefault();zoomToZone(row.dataset.zoneId);}
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
