@@ -15,7 +15,7 @@ let polygonLayer;
 let mapRowsForRender=[];
 let mapIsAllView=false;
 let geoForCurrentMap=null;
-const THEME_COLORS={primary:'#FF9A86',secondary:'#FFB399',light:'#FFD6A6',pale:'#FFF0BE',sample:'#FF9A86',individual:'#FFD6A6',otherSurveyor:'#FFB399'};
+const THEME_COLORS={primary:'#FF9A86',secondary:'#FFB399',light:'#FFD6A6',pale:'#FFF0BE',sample:'#FF9A86',individual:'#FFD6A6',otherSurveyor:'#2563EB'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -44,13 +44,13 @@ function getDb() {
 }
 async function persistCity(city) {
   const db=await getDb();
-  await new Promise((resolve,reject)=>{ const tx=db.transaction('cities','readwrite'); tx.objectStore('cities').put({city,rows:rowsByCity[city]||[],geo:geoByCity[city]||null}); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); });
+  await new Promise((resolve,reject)=>{ const tx=db.transaction('cities','readwrite'); tx.objectStore('cities').put({city,rows:rowsByCity[city]||[],geo:geoByCity[city]||null,geoDisplay:geoOverviewByCity[city]||null}); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); });
 }
 async function restoreStoredData() {
   try {
     const db=await getDb();
     const saved=await new Promise((resolve,reject)=>{const tx=db.transaction('cities','readonly'); const req=tx.objectStore('cities').getAll(); req.onsuccess=()=>resolve(req.result||[]); req.onerror=()=>reject(req.error);});
-    for(const item of saved){ if(Array.isArray(item.rows))rowsByCity[item.city]=mergeRows(rowsByCity[item.city]||[],item.rows); if(item.geo)geoByCity[item.city]=item.geo; if(!citySelect.querySelector(`option[value="${CSS.escape(item.city)}"]`)){const o=document.createElement('option');o.value=item.city;o.textContent=item.city;citySelect.append(o);} }
+    for(const item of saved){ if(Array.isArray(item.rows))rowsByCity[item.city]=mergeRows(rowsByCity[item.city]||[],item.rows); if(item.geo)geoByCity[item.city]=item.geo; if(item.geoDisplay)geoOverviewByCity[item.city]=item.geoDisplay; if(!citySelect.querySelector(`option[value="${CSS.escape(item.city)}"]`)){const o=document.createElement('option');o.value=item.city;o.textContent=item.city;citySelect.append(o);} }
   } catch(error) { statusLine.textContent=`Penyimpanan browser tidak dapat dibuka: ${error.message||error}`; }
 }
 
@@ -93,8 +93,23 @@ function makeOverviewGeo(geo){
     const properties=feature.properties||{},zone=propertyValue(properties,['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA']);
     const slimProperties=zone==null?{}:{NOZN:zone};
     if(Array.isArray(properties._zone_surveyors))slimProperties._zone_surveyors=properties._zone_surveyors;
+    for(const [name,value] of Object.entries(properties)){
+      const key=normalizedField(name);
+      if(value!=null&&key.includes('nilai')&&(key.includes('tanah')||key.startsWith('nilaita')))slimProperties[name]=value;
+    }
     return {...feature,properties:slimProperties,geometry:{...feature.geometry,coordinates:reduceCoords(feature.geometry.coordinates,feature.geometry.type)}};
   })};
+}
+
+function zoneDataForCity(city){
+  if(remoteOverviewLoaded.has(city)&&geoOverviewByCity[city])return geoOverviewByCity[city];
+  if(remoteFullGeoLoaded.has(city)&&geoByCity[city])return geoByCity[city];
+  return geoByCity[city]||geoOverviewByCity[city]||null;
+}
+function displayGeoForCity(city){
+  if(!city||city==='ALL')return null;
+  if(!geoOverviewByCity[city]&&geoByCity[city])geoOverviewByCity[city]=makeOverviewGeo(geoByCity[city]);
+  return geoOverviewByCity[city]||geoByCity[city]||null;
 }
 
 async function verifyAdminUser(user) {
@@ -122,7 +137,7 @@ async function fetchZoneGeo(info,pathKey) {
   }
   const {data}=supabaseClient.storage.from('zone-geojson').getPublicUrl(info[pathKey]);
   const publicUrl=new URL(data.publicUrl);
-  publicUrl.searchParams.set('v',String(info._version||Date.now()));
+  publicUrl.searchParams.set('v',String(pathKey==='_display_path'?(info._display_version||info._version||Date.now()):(info._version||Date.now())));
   const response=await fetch(publicUrl.toString(),{cache:'no-store'});
   if(!response.ok)throw new Error(`File polygon tidak dapat diunduh dari penyimpanan database (${response.status}).`);
   if(pathKey==='_overview_path'&&info._overview_compressed){
@@ -135,7 +150,8 @@ async function loadRemoteCity(city,{overview=false}={}) {
   const info=await remoteZoneInfo(city);
   const geoSet=overview?remoteOverviewLoaded:remoteFullGeoLoaded;
   if(!geoSet.has(city)){
-    const geo=await fetchZoneGeo(info,overview?'_overview_path':'_storage_path');
+    const pathKey=overview?(info?._display_path?'_display_path':'_overview_path'):'_storage_path';
+    const geo=await fetchZoneGeo(info,pathKey);
     if(overview){if(geo)geoOverviewByCity[city]=geo;else delete geoOverviewByCity[city];}
     else {if(geo)geoByCity[city]=geo;else delete geoByCity[city];}
     geoSet.add(city);
@@ -161,7 +177,7 @@ async function loadRemoteData() {
   if(error)throw error;
   for(const row of data||[])addCityOption(row.city);
   if(citySelect.value==='ALL')await loadAllRemoteCities();
-  else if(citySelect.value)await loadRemoteCity(citySelect.value);
+  else if(citySelect.value)await loadRemoteCity(citySelect.value,{overview:true});
 }
 
 function districtNames(){return [...citySelect.options].map(option=>option.value).filter(city=>city&&city!=='ALL');}
@@ -222,6 +238,56 @@ async function saveSamples(city,rows) {
   await persistCity(city);
 }
 
+function displayGeoWithAuthoritativeProperties(displayGeo,zoneGeo){
+  const displayFeatures=(displayGeo?.features||[]).filter(feature=>['Polygon','MultiPolygon'].includes(feature.geometry?.type));
+  const sourceFeatures=(zoneGeo?.features||[]).filter(feature=>['Polygon','MultiPolygon'].includes(feature.geometry?.type));
+  const sourceByZone=new Map();
+  for(const feature of sourceFeatures){const zone=featureZone(feature);if(zone!=null&&!sourceByZone.has(idKey(zone)))sourceByZone.set(idKey(zone),feature);}
+  if(!sourceByZone.size)throw new Error('Polygon zona lengkap belum tersedia atau atribut NOZN tidak ditemukan.');
+  if(!displayFeatures.length)throw new Error('GeoJSON tampilan tidak berisi polygon.');
+  const displayZones=new Set();
+  for(const feature of displayFeatures){
+    const zone=featureZone(feature);
+    if(zone==null)throw new Error('Ada polygon tampilan tanpa atribut NOZN.');
+    const bounds=geometryBounds(feature.geometry);
+    if(!bounds||Math.abs(bounds[0])>180||Math.abs(bounds[2])>180||Math.abs(bounds[1])>90||Math.abs(bounds[3])>90)throw new Error('GeoJSON tampilan harus memakai koordinat WGS84 longitude/latitude. Ekspor ulang dengan Project to WGS84 dicentang.');
+    displayZones.add(idKey(zone));
+  }
+  const missing=[...sourceByZone.keys()].filter(zone=>!displayZones.has(zone));
+  const extra=[...displayZones].filter(zone=>!sourceByZone.has(zone));
+  if(missing.length||extra.length)throw new Error(`NOZN GeoJSON tampilan harus sama dengan zona lengkap. Tidak ada di tampilan: ${missing.slice(0,8).join(', ')||'—'}; tidak ada di zona lengkap: ${extra.slice(0,8).join(', ')||'—'}.`);
+  const features=displayFeatures.map(feature=>{
+    const zone=featureZone(feature),source=sourceByZone.get(idKey(zone)),sourceProperties=source.properties||{};
+    const properties={NOZN:zone};
+    const owners=Array.isArray(sourceProperties._zone_surveyors)?sourceProperties._zone_surveyors:feature.properties?._zone_surveyors;
+    if(Array.isArray(owners))properties._zone_surveyors=owners;
+    for(const [name,value] of Object.entries(sourceProperties)){
+      const key=normalizedField(name);
+      if(value!=null&&key.includes('nilai')&&(key.includes('tanah')||key.startsWith('nilaita')))properties[name]=value;
+    }
+    return {...feature,properties};
+  });
+  return {type:'FeatureCollection',features};
+}
+
+async function saveDisplayGeo(city,geo){
+  const version=Date.now();
+  if(!supabaseClient){geoOverviewByCity[city]=geo;await persistCity(city);return;}
+  if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah GeoJSON tampilan.');
+  const info=await remoteZoneInfo(city);
+  if(!info?._storage_path)throw new Error('GeoJSON zona lengkap belum tersimpan. Unggah zona utama terlebih dahulu.');
+  const objectName=city.toLocaleLowerCase('en-US').replace(/[^a-z0-9-]+/g,'-');
+  const path=`zones/display/${objectName}.geojson`;
+  const file=new Blob([JSON.stringify(geo)],{type:'application/geo+json'});
+  const {error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(path,file,{contentType:file.type,cacheControl:'60',upsert:true});
+  if(uploadError)throw uploadError;
+  const updated={...(info||{}),_display_path:path,_display_version:version};
+  const {data,error}=await supabaseClient.from('city_zones').upsert({city,geojson:updated,updated_by:currentUser.id},{onConflict:'city'}).select('city,updated_at').single();
+  if(error)throw error;
+  if(data?.city!==city)throw new Error('Database tidak mengonfirmasi penyimpanan GeoJSON tampilan.');
+  geoOverviewByCity[city]=geo;remoteZoneMetadata.set(city,updated);remoteOverviewLoaded.add(city);
+}
+
 async function saveZone(city,geo) {
   if(!supabaseClient){await persistCity(city);return;}
   if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
@@ -237,7 +303,7 @@ async function saveZone(city,geo) {
   const overview=makeOverviewGeo(geo);
   const overviewText=JSON.stringify(overview);
   const overviewFile=new Blob([overviewText],{type:'application/geo+json'});
-  const overviewMetadata={_overview_path:overviewPath,_overview_compressed:false,_version:version};
+  const overviewMetadata={_overview_path:overviewPath,_display_path:overviewPath,_display_version:version,_overview_compressed:false,_version:version};
   const {error:overviewError}=await supabaseClient.storage.from('zone-geojson').upload(overviewMetadata._overview_path,overviewFile,{
     contentType:overviewFile.type,cacheControl:'60',upsert:true
   });
@@ -255,13 +321,15 @@ async function prepareExistingOverview(city){
   if(!currentUser)throw new Error('Login sebagai admin terlebih dahulu.');
   const info=await remoteZoneInfo(city);
   if(!info?._storage_path)throw new Error(`Polygon detail ${city} belum tersimpan di database.`);
+  if(supabaseClient&&!remoteFullGeoLoaded.has(city))await loadRemoteCity(city);
   const full=geoByCity[city]||await fetchZoneGeo(info,'_storage_path');
   const overview=makeOverviewGeo(full),overviewText=JSON.stringify(overview),objectName=city.toLocaleLowerCase('en-US').replace(/[^a-z0-9-]+/g,'-');
   const path=`zones/overview/${objectName}.geojson`;
   const file=new Blob([overviewText],{type:'application/geo+json'});
   const {error:uploadError}=await supabaseClient.storage.from('zone-geojson').upload(path,file,{contentType:'application/geo+json',cacheControl:'60',upsert:true});
   if(uploadError)throw uploadError;
-  const updated={...info,_overview_path:path,_overview_compressed:false,_version:Date.now()};
+  const version=Date.now();
+  const updated={...info,_overview_path:path,_display_path:path,_display_version:version,_overview_compressed:false,_version:version};
   const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:updated,updated_by:currentUser.id},{onConflict:'city'});
   if(error)throw error;
   geoOverviewByCity[city]=overview;remoteZoneMetadata.set(city,updated);remoteOverviewLoaded.add(city);
@@ -378,7 +446,7 @@ function currentRows() {
 }
 function combinedDistrictGeo(){
   const features=[];
-  for(const city of districtNames())for(const feature of (geoOverviewByCity[city]||geoByCity[city])?.features||[]){
+  for(const city of districtNames())for(const feature of (displayGeoForCity(city)||geoByCity[city])?.features||[]){
     const zone=featureZone(feature);
     features.push({...feature,properties:{...(feature.properties||{}),_progress_zone:zone==null?null:`${city} • ${zone}`}});
   }
@@ -397,7 +465,7 @@ function allDates(rows) { return unique(rows.map(r => r.date)).sort(); }
 function rebuildFilters() {
   const rows = currentRows();
   const city=citySelect.value;
-  const geo=city==='ALL'?combinedDistrictGeo():geoByCity[city];
+  const geo=city==='ALL'?combinedDistrictGeo():zoneDataForCity(city);
   const assigned=(geo?.features||[]).flatMap(feature=>Array.isArray(feature.properties?._zone_surveyors)?feature.properties._zone_surveyors:[]);
   const oldPerson = surveyorSelect.value; surveyorSelect.replaceChildren();
   const everybody=document.createElement('option'); everybody.value=''; everybody.textContent='Semua surveyor'; surveyorSelect.append(everybody);
@@ -600,7 +668,7 @@ function landValueForSample(row) {
   if(prefix&&rawZone.startsWith(prefix))rawZone=rawZone.slice(prefix.length);
   const zone=idKey(rawZone);
   if(!zone)return null;
-  const geo=geoByCity[city];
+  const geo=zoneDataForCity(city);
   if(!geo)return null;
   let index=zonePropertiesCache.get(geo);
   if(!index){index=new Map();for(const feature of geo.features||[]){const id=featureZone(feature);if(id!=null&&!index.has(idKey(id)))index.set(idKey(id),feature.properties||{});}zonePropertiesCache.set(geo,index);}
@@ -673,7 +741,7 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
   zoneLayersById=new Map();
   mapRowsForRender=markerRows;mapSelectedSurveyor=selectedSurveyor;mapIsAllView=citySelect.value==='ALL';
   if (polygonLayer) { map.removeLayer(polygonLayer); polygonLayer=null; }
-  const geo=geoOverride===undefined?geoByCity[citySelect.value]:geoOverride;
+  const geo=geoOverride===undefined?displayGeoForCity(citySelect.value):geoOverride;
   geoForCurrentMap=geo;
   let polygonCount=0;
   if (geo) {
@@ -773,7 +841,7 @@ function update() {
   const threshold=TARGET_SAMPLES_PER_ZONE;
   const source=currentRows();
   const filtered=source.filter(r=>!selectedPerson||r.surveyor===selectedPerson);
-  const allGeo=isAll?combinedDistrictGeo():geoByCity[city];
+  const allGeo=isAll?combinedDistrictGeo():zoneDataForCity(city);
   // Calculate each unique zone once across the complete current zone set.
   const allKnownZones=new Set(allGeo?unique((allGeo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
   const sampleCalc=calculate(source,threshold,allKnownZones);
@@ -827,13 +895,13 @@ function update() {
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
   renderZoneSampleList(geo,zoneCalc);
-  renderMap(filtered,zoneCalc,geo,selectedPerson?source:filtered,selectedPerson);
+  renderMap(filtered,zoneCalc,isAll?combinedDistrictGeo():displayGeoForCity(city),selectedPerson?source:filtered,selectedPerson);
   document.getElementById('otherSurveyorLegend').hidden=!selectedPerson;
   if(isAll){
-    const missing=districtNames().filter(name=>remoteZoneMetadata.has(name)&&remoteZoneMetadata.get(name)?._storage_path&&!remoteZoneMetadata.get(name)?._overview_path);
-    if(missing.length)document.getElementById('mapHint').textContent=`Tampilan ALL ringan: polygon ringkas belum disiapkan untuk ${missing.join(', ')}. Admin dapat memilih kabupaten tersebut lalu menekan “Siapkan polygon ringkas ALL”.`;
+    const missing=districtNames().filter(name=>remoteZoneMetadata.has(name)&&remoteZoneMetadata.get(name)?._storage_path&&!remoteZoneMetadata.get(name)?._display_path&&!remoteZoneMetadata.get(name)?._overview_path);
+    if(missing.length)document.getElementById('mapHint').textContent=`Polygon ringkas belum tersedia untuk ${missing.join(', ')}; sementara script menyiapkannya dari polygon lengkap.`;
   }
-  const geoNote=isAll?`${districtNames().length} kabupaten dalam tampilan gabungan.`:geoByCity[city]?'Polygon dimuat.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
+  const geoNote=isAll?`${districtNames().length} kabupaten dalam tampilan gabungan.`:zoneDataForCity(city)?'Polygon tampilan dimuat; inventaris zona lengkap dipakai untuk rekap.':'Belum ada polygon GeoJSON untuk kabupaten ini.';
   statusLine.innerHTML=city?`Data <strong>${escapeHtml(city)}</strong>: ${source.length.toLocaleString('id-ID')} baris valid • ${geoNote}`:'Pilih kabupaten untuk memuat polygon dan titik sampel.';
   if(!city)document.getElementById('mapHint').textContent='Pilih kabupaten untuk menampilkan polygon dan titik sampel.';
 }
@@ -924,12 +992,24 @@ function importSampleFeatures(geo,city) {
   return {imported,skipped,unassigned};
 }
 
+function shapefileNeedsZoneLookup(geo){
+  return (geo?.features||[]).some(feature=>{
+    const geometry=feature.geometry;
+    if(!['Point','MultiPoint'].includes(geometry?.type))return false;
+    return propertyValue(feature.properties||{},['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA'])==null;
+  });
+}
+
 document.getElementById('shpInput').addEventListener('change',async event=>{
   const file=event.target.files?.[0]; if(!file)return;
   if(!citySelect.value||citySelect.value==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah sampel.');event.target.value='';return;}
   try{
     beginLoading('Membaca ZIP shapefile titik…');await browserPaint();
-    const geo=await readShapefile(file); const city=citySelect.value; const result=importSampleFeatures(geo,city);
+    const city=citySelect.value;const geo=await readShapefile(file);
+    if(supabaseClient&&shapefileNeedsZoneLookup(geo)&&!remoteFullGeoLoaded.has(city)){
+      setLoadingStatus(`Memuat polygon lengkap ${city} untuk mencocokkan koordinat…`);await browserPaint();await loadRemoteCity(city);
+    }
+    const result=importSampleFeatures(geo,city);
     if(!result.imported.length)throw new Error('Tidak ada feature titik dengan atribut nomor sampel, surveyor, dan tanggal. Periksa isi DBF.');
     const cleanRows=mergeRows([],result.imported);
     setLoadingStatus('Mengganti data sampel lama dengan unggahan terbaru…');await saveSamples(city,cleanRows);rowsByCity[city]=cleanRows;setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();shouldFit=true; rebuildFilters(); update();
@@ -948,9 +1028,9 @@ citySelect.addEventListener('change',async()=>{
     beginLoading('Menyiapkan tampilan gabungan…');
     try{await loadAllRemoteCities(request);}catch(error){loadError=`Tampilan ALL belum lengkap: ${error.message||error}`;}
     finally{if(request===citySelectionRequest)endLoading();}
-  }else if(supabaseClient&&!remoteFullGeoLoaded.has(city)){
-    beginLoading(`Memuat polygon dan sampel ${city}…`);
-    try{await loadRemoteCity(city);}catch(error){loadError=`Data ${city} belum dapat dimuat: ${error.message||error}`;}
+  }else if(supabaseClient&&!remoteOverviewLoaded.has(city)){
+    beginLoading(`Memuat polygon tampilan dan sampel ${city}…`);
+    try{await loadRemoteCity(city,{overview:true});}catch(error){loadError=`Data ${city} belum dapat dimuat: ${error.message||error}`;}
     finally{if(request===citySelectionRequest)endLoading();}
   }
   if(request!==citySelectionRequest)return;
@@ -1002,7 +1082,7 @@ geoInput.addEventListener('change',async event=>{
     if(zoneUploadMode==='surveyor'){
       if(!file.name.toLowerCase().endsWith('.zip'))throw new Error('Mode zona per surveyor memerlukan satu ZIP yang berisi beberapa SHP polygon.');
       previousGeo=geoByCity[city]||null;
-      if(supabaseClient&&!geoByCity[city]){setLoadingStatus(`Memuat zona tersimpan ${city} sebelum penggantian…`);await browserPaint();await loadRemoteCity(city);previousGeo=geoByCity[city]||null;}
+      if(supabaseClient&&!remoteFullGeoLoaded.has(city)){setLoadingStatus(`Memuat zona tersimpan ${city} sebelum penggantian…`);await browserPaint();await loadRemoteCity(city);previousGeo=geoByCity[city]||null;}
       previousRows=rowsByCity[city]||[];
       beginLoading('Membaca ZIP zona per surveyor…');await browserPaint();
       if(typeof window.shp!=='function')throw new Error('Pembaca SHP belum termuat. Periksa koneksi internet dan muat ulang halaman.');
@@ -1043,6 +1123,29 @@ geoInput.addEventListener('change',async event=>{
   finally{endLoading();event.target.value='';zoneUploadMode='overall';geoInput.accept='.zip,.geojson,.json,application/zip,application/geo+json';}
 });
 
+const displayGeoInput=document.getElementById('displayGeoInput');
+displayGeoInput.addEventListener('change',async event=>{
+  const file=event.target.files?.[0];if(!file)return;
+  const city=citySelect.value;
+  if(!city||city==='ALL'){alert('Pilih satu kabupaten sebelum mengunggah GeoJSON tampilan.');event.target.value='';return;}
+  try{
+    beginLoading('Memeriksa GeoJSON tampilan…');await browserPaint();
+    if(supabaseClient&&!remoteFullGeoLoaded.has(city)){
+      setLoadingStatus(`Memuat zona lengkap ${city} untuk memeriksa daftar NOZN…`);await browserPaint();await loadRemoteCity(city);
+    }
+    const zoneGeo=geoByCity[city]||zoneDataForCity(city);
+    if(!zoneGeo)throw new Error('Zona lengkap kabupaten ini belum tersedia. Unggah ZIP SHP zona terlebih dahulu.');
+    const parsed=featureCollection(JSON.parse(await file.text()));
+    const displayGeo=displayGeoWithAuthoritativeProperties(parsed,zoneGeo);
+    setLoadingStatus('Menyimpan GeoJSON tampilan tanpa mengganti zona sumber…');await browserPaint();
+    await saveDisplayGeo(city,displayGeo);
+    shouldFit=true;rebuildFilters();update();
+    statusLine.innerHTML=`GeoJSON tampilan untuk <strong>${escapeHtml(city)}</strong> berhasil disimpan: ${displayGeo.features.length.toLocaleString('id-ID')} polygon. Zona lengkap dan perhitungan tidak diganti.`;
+  }catch(error){
+    const detail=describeUploadError(error);statusLine.textContent=`GeoJSON tampilan gagal disimpan: ${detail}`;alert(`GeoJSON tampilan gagal disimpan: ${detail}`);
+  }finally{endLoading();event.target.value='';}
+});
+
 const adminPanel=document.getElementById('adminPanel');
 const adminLogin=document.getElementById('adminLogin');
 const setPasswordForm=document.getElementById('setPasswordForm');
@@ -1053,7 +1156,7 @@ document.getElementById('zoneSampleTable').addEventListener('click',event=>{
     const key=sortButton.dataset.zoneSort;
     if(zoneListSort.key===key)zoneListSort.direction=zoneListSort.direction==='asc'?'desc':'asc';
     else zoneListSort={key,direction:'asc'};
-    const allGeo=citySelect.value==='ALL'?combinedDistrictGeo():geoByCity[citySelect.value];
+    const allGeo=citySelect.value==='ALL'?combinedDistrictGeo():zoneDataForCity(citySelect.value);
     renderZoneSampleList(geoForSurveyor(allGeo,surveyorSelect.value),currentCalculation);return;
   }
   const button=event.target.closest('button[data-zone-id]');
@@ -1121,14 +1224,14 @@ document.getElementById('migrateLocalButton').addEventListener('click',async()=>
 document.getElementById('prepareOverviewButton').addEventListener('click',async()=>{
   if(!currentUser){alert('Login sebagai admin terlebih dahulu.');return;}
   const city=citySelect.value;
-  if(!city||city==='ALL'){alert('Pilih satu kabupaten dahulu untuk menyiapkan polygon ringkas.');return;}
+  if(!city||city==='ALL'){alert('Pilih satu kabupaten dahulu untuk membuat GeoJSON tampilan ringkas.');return;}
   const button=document.getElementById('prepareOverviewButton');button.disabled=true;
-  beginLoading(`Membuat polygon ringkas untuk ${city}…`);await browserPaint();
+  beginLoading(`Membuat GeoJSON tampilan ringkas untuk ${city}…`);await browserPaint();
   try{
     const count=await prepareExistingOverview(city);
     if(citySelect.value==='ALL')await loadAllRemoteCities(citySelectionRequest);
-    update();statusLine.textContent=`Polygon ringkas ${city} berhasil disiapkan untuk tampilan ALL (${count.toLocaleString('id-ID')} zona).`;
-  }catch(error){statusLine.textContent=`Polygon ringkas gagal dibuat: ${error.message||error}`;}
+    update();statusLine.textContent=`GeoJSON tampilan ringkas ${city} berhasil disiapkan (${count.toLocaleString('id-ID')} zona).`;
+  }catch(error){statusLine.textContent=`GeoJSON tampilan ringkas gagal dibuat: ${error.message||error}`;}
   finally{button.disabled=false;endLoading();}
 });
 

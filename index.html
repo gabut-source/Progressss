@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=warm-palette-6">
+  <link rel="stylesheet" href="style.css?v=warm-palette-7">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
@@ -47,14 +47,17 @@
             </div>
           </dialog>
           <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
+          <label class="button secondary" for="displayGeoInput">Unggah GeoJSON tampilan ringan</label>
+          <input id="displayGeoInput" type="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
           <label class="button secondary" for="shpInput">Tambah SHP sampel</label>
           <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
           <label class="button secondary" for="excelInput">Tambah Excel</label>
           <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
-          <button id="prepareOverviewButton" class="button secondary" type="button">Siapkan polygon ringkas ALL</button>
+          <button id="prepareOverviewButton" class="button secondary" type="button">Buat GeoJSON ringkas otomatis</button>
           <button id="migrateLocalButton" class="button secondary" type="button" hidden>Impor data lama dari browser</button>
           <button id="adminLogout" class="button ghost" type="button">Keluar</button>
         </div>
+        <p class="text-sm text-slate-500">GeoJSON tampilan ringan dari ArcGIS Pro hanya mengganti bentuk polygon di peta. Gunakan koordinat WGS84 dan pastikan daftar NOZN sama dengan zona utama.</p>
       </div>
     </section>
 

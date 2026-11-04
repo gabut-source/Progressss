@@ -254,7 +254,7 @@ td.positive{color:#A64F48}
 .status-line[data-loading="true"]::before{border-color:#FFD6A6;border-top-color:#FF9A86}
 .sample-dot{background:#FF9A86}
 .individual-dot{background:#FFD6A6;border:1px solid #A64F48}
-.other-surveyor-dot{background:#FFB399}
+.other-surveyor-dot{background:#2563EB}
 .swatch.done{background:#FF9A86}
 .swatch.pending{background:#FFD6A6}
 .map-note{border-top-color:var(--warm-peach)}
@@ -303,6 +303,7 @@ body,body.bg-calm-50{background:#FFF0BE}
 .table-wrap{width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 .table-panel .section-heading p{white-space:normal;overflow-wrap:anywhere}
 .table-panel table{width:max-content;min-width:100%}
+.kpi,.filters,.admin-panel,.table-panel,.report-toolbar{position:relative}
 .kpi:hover::before,.filters:hover::before,.admin-panel:hover::before,.table-panel:hover::before,.report-toolbar:hover::before{content:"✧  ♡";position:absolute;z-index:5;top:5px;left:10px;color:#A64F48;font-size:13px;letter-spacing:3px;pointer-events:none;text-shadow:0 0 7px #FFF0BE;animation:panel-sparkle .85s ease-in-out infinite alternate}
 .kpi:hover::after,.filters:hover::after,.admin-panel:hover::after,.table-panel:hover::after,.report-toolbar:hover::after{content:"✦  ♥  ✧";position:absolute;z-index:5;top:5px;right:10px;color:#A64F48;font-size:13px;letter-spacing:3px;pointer-events:none;text-shadow:0 0 7px #FFF0BE;animation:panel-sparkle .75s ease-in-out infinite alternate-reverse}
 @keyframes panel-sparkle{from{opacity:.5;transform:scale(.92) rotate(-4deg)}to{opacity:1;transform:scale(1.08) rotate(4deg)}}
