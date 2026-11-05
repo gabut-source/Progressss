@@ -53,11 +53,11 @@
           <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
           <label class="button secondary" for="excelInput">Tambah Excel</label>
           <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
-          <button id="prepareOverviewButton" class="button secondary" type="button">Buat GeoJSON ringkas otomatis</button>
+          <button id="prepareOverviewButton" class="button secondary" type="button">Buat GeoJSON tampilan dari zona utama</button>
           <button id="migrateLocalButton" class="button secondary" type="button" hidden>Impor data lama dari browser</button>
           <button id="adminLogout" class="button ghost" type="button">Keluar</button>
         </div>
-        <p class="text-sm text-slate-500">GeoJSON tampilan ringan dari ArcGIS Pro hanya mengganti bentuk polygon di peta. Gunakan koordinat WGS84 dan pastikan daftar NOZN sama dengan zona utama.</p>
+        <p class="text-sm text-slate-500">GeoJSON tampilan terpisah hanya untuk peta. Untuk ukuran lebih ringan, unggah hasil Simplify Shared Edges dari ArcGIS Pro dalam WGS84 dengan daftar NOZN yang sama. Tombol di atas membuat tampilan dari geometri zona utama tanpa menyederhanakan bentuk.</p>
       </div>
     </section>
 

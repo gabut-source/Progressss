@@ -74,30 +74,7 @@ function addCityOption(city) {
   const option=document.createElement('option'); option.value=city; option.textContent=city; citySelect.append(option);
 }
 
-function simplifyLine(line,tolerance=0.0005){
-  if(!Array.isArray(line)||line.length<=4)return line;
-  const closed=line.length>3&&line[0][0]===line[line.length-1][0]&&line[0][1]===line[line.length-1][1];
-  const points=closed?line.slice(0,-1):line;
-  if(points.length<=3)return line;
-  const keep=new Uint8Array(points.length);keep[0]=1;keep[points.length-1]=1;
-  const stack=[[0,points.length-1]],tol2=tolerance*tolerance;
-  while(stack.length){
-    const [first,last]=stack.pop(),a=points[first],b=points[last];
-    const dx=b[0]-a[0],dy=b[1]-a[1],den=dx*dx+dy*dy;let max=tol2,index=-1;
-    for(let i=first+1;i<last;i++){
-      const p=points[i];let t=den?((p[0]-a[0])*dx+(p[1]-a[1])*dy)/den:0;t=Math.max(0,Math.min(1,t));
-      const ex=p[0]-(a[0]+t*dx),ey=p[1]-(a[1]+t*dy),distance=ex*ex+ey*ey;
-      if(distance>max){max=distance;index=i;}
-    }
-    if(index>=0){keep[index]=1;stack.push([first,index],[index,last]);}
-  }
-  const result=points.filter((_,index)=>keep[index]);
-  if(result.length<3)return line;
-  if(closed)result.push(result[0].slice());
-  return result;
-}
 function makeOverviewGeo(geo){
-  const reduceCoords=(coords,type)=>type==='Polygon'?coords.map(ring=>simplifyLine(ring)):coords.map(polygon=>polygon.map(ring=>simplifyLine(ring)));
   return {type:'FeatureCollection',features:(geo.features||[]).map(feature=>{
     const properties=feature.properties||{},zone=propertyValue(properties,['NOZN','NO_ZN','NO_ZONA','ZONE','ID_ZONA','ZONA']);
     const slimProperties=zone==null?{}:{NOZN:zone};
@@ -106,7 +83,7 @@ function makeOverviewGeo(geo){
       const key=normalizedField(name);
       if(value!=null&&key.includes('nilai')&&(key.includes('tanah')||key.startsWith('nilaita')))slimProperties[name]=value;
     }
-    return {...feature,properties:slimProperties,geometry:{...feature.geometry,coordinates:reduceCoords(feature.geometry.coordinates,feature.geometry.type)}};
+    return {...feature,properties:slimProperties};
   })};
 }
 
@@ -1276,14 +1253,14 @@ document.getElementById('migrateLocalButton').addEventListener('click',async()=>
 document.getElementById('prepareOverviewButton').addEventListener('click',async()=>{
   if(!currentUser){alert('Login sebagai admin terlebih dahulu.');return;}
   const city=citySelect.value;
-  if(!city||city==='ALL'){alert('Pilih satu kabupaten dahulu untuk membuat GeoJSON tampilan ringkas.');return;}
+  if(!city||city==='ALL'){alert('Pilih satu kabupaten dahulu untuk membuat GeoJSON tampilan dari zona utama.');return;}
   const button=document.getElementById('prepareOverviewButton');button.disabled=true;
-  beginLoading(`Membuat GeoJSON tampilan ringkas untuk ${city}…`);await browserPaint();
+  beginLoading(`Membuat GeoJSON tampilan dari zona utama ${city}…`);await browserPaint();
   try{
     const count=await prepareExistingOverview(city);
     if(citySelect.value==='ALL')await loadAllRemoteCities(citySelectionRequest);
-    update();statusLine.textContent=`GeoJSON tampilan ringkas ${city} berhasil disiapkan (${count.toLocaleString('id-ID')} zona).`;
-  }catch(error){statusLine.textContent=`GeoJSON tampilan ringkas gagal dibuat: ${error.message||error}`;}
+    update();statusLine.textContent=`GeoJSON tampilan untuk ${city} berhasil dibuat dari geometri zona utama (${count.toLocaleString('id-ID')} zona).`;
+  }catch(error){statusLine.textContent=`GeoJSON tampilan gagal dibuat: ${error.message||error}`;}
   finally{button.disabled=false;endLoading();}
 });
 
