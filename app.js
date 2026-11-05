@@ -942,7 +942,7 @@ function update() {
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
   renderZoneSampleList(geo,zoneCalc);
-  renderMap(filtered,zoneCalc,isAll?combinedDistrictGeo():displayGeoForCity(city),selectedPerson?source:filtered,selectedPerson);
+  renderMap(filtered,zoneCalc,geo,selectedPerson?source:filtered,selectedPerson);
   document.getElementById('otherSurveyorLegend').hidden=!selectedPerson;
   if(isAll){
     const missing=districtNames().filter(name=>remoteZoneMetadata.has(name)&&remoteZoneMetadata.get(name)?._storage_path&&!remoteZoneMetadata.get(name)?._display_path&&!remoteZoneMetadata.get(name)?._overview_path);
