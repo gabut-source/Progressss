@@ -448,8 +448,8 @@ if (mapAvailable) {
       const allVisible=map.getZoom()>=(mapIsAllView?11:12);
       const labelsVisible=map.getZoom()>=14;
       mapAllMarkersVisible=allVisible;mapSampleLabelsVisible=labelsVisible;
-      renderVisibleMapFeatures();
-      drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor);
+      const polygonsChanged=renderVisibleMapFeatures();
+      drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor,polygonsChanged);
     });
   });
 }
@@ -743,6 +743,7 @@ function zoomToZone(id) {
   for(const item of matching.slice(1))bounds=bounds.extend(item.bounds);
   selectedZoneId=id;
   renderVisibleMapFeatures(true);
+  drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor,true);
   const openPopup=()=>{
     const layer=zoneLayersById.get(id)?.[0];
     if(!layer)return false;
@@ -899,7 +900,7 @@ function renderVisibleMapFeatures(force=false){
   if(polygonLayer)map.removeLayer(polygonLayer);
   polygonLayer=null;zoneLayersById=new Map();
   if(visible.length){
-    polygonLayer=L.geoJSON({type:'FeatureCollection',features:visible},{smoothFactor:.5,
+    polygonLayer=L.geoJSON({type:'FeatureCollection',features:visible},{smoothFactor:.5,renderer:samplePointRenderer,
       style:feature=>{
         const z=featureZone(feature),id=z==null?'':idKey(z),done=z!=null&&currentCalculation?.completed.has(id);
         return {color:id===selectedZoneId?THEME_COLORS.primary:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:mapIsAllView ? .7 : 1.4,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:mapIsAllView ? .24 : .38};
@@ -921,6 +922,7 @@ function renderVisibleMapFeatures(force=false){
   }
   renderedPolygonFeatures=visible;
   updateMapViewportHint();
+  return true;
 }
 
 function updateMapViewportHint(){
