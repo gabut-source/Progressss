@@ -411,12 +411,16 @@ citySelect.value='';
 const mapAvailable = typeof L !== 'undefined';
 let map;
 let mapSelectedSurveyor='';
+let samplePointsEnabled=true;
+let samplePointRenderer=null;
+let mapRenderFrame=0;
 let userLocationMarker=null;
 let userLocationAccuracy=null;
 let mapAllMarkersVisible=false;
 let mapSampleLabelsVisible=false;
 if (mapAvailable) {
   map = L.map('map', { zoomControl: true, preferCanvas:true }).setView([-7.05,113.7], 9);
+  samplePointRenderer=L.canvas({padding:.25});
   const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     maxZoom:19,attribution:'Tiles &copy; Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
   }).addTo(map);
@@ -438,11 +442,15 @@ if (mapAvailable) {
   };
   locateControl.addTo(map);
   map.on('moveend',()=>{
-    const allVisible=map.getZoom()>=10;
-    const labelsVisible=map.getZoom()>=14;
-    mapAllMarkersVisible=allVisible;mapSampleLabelsVisible=labelsVisible;
-    renderVisibleMapFeatures();
-    drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor);
+    if(mapRenderFrame)return;
+    mapRenderFrame=requestAnimationFrame(()=>{
+      mapRenderFrame=0;
+      const allVisible=map.getZoom()>=(mapIsAllView?11:12);
+      const labelsVisible=map.getZoom()>=14;
+      mapAllMarkersVisible=allVisible;mapSampleLabelsVisible=labelsVisible;
+      renderVisibleMapFeatures();
+      drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor);
+    });
   });
 }
 
@@ -862,11 +870,11 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
   renderedPolygonFeatures=null;renderedPointEntries=null;renderedPointSurveyor='';renderedPointLabels=null;renderedPointsSuppressed=null;
   if (shouldFit) {
     const bounds=mapFeatureIndex.map(item=>item.bounds);
-    if(mapPointIndex.length)bounds.push(L.latLngBounds(mapPointIndex.map(item=>item.latlng)));
+    if(samplePointsEnabled&&mapPointIndex.length)bounds.push(L.latLngBounds(mapPointIndex.map(item=>item.latlng)));
     if (bounds.length) { let b=bounds[0]; for (const x of bounds.slice(1)) b=b.extend(x); map.fitBounds(b.pad(.08),{maxZoom:mapIsAllView?9:14}); }
     shouldFit=false;
   }
-  mapAllMarkersVisible=map.getZoom()>=10;
+  mapAllMarkersVisible=map.getZoom()>=(mapIsAllView?11:12);
   mapSampleLabelsVisible=map.getZoom()>=14;
   renderVisibleMapFeatures();
   drawSampleMarkers(markerRows,mapIsAllView,selectedSurveyor);
@@ -908,19 +916,30 @@ function renderVisibleMapFeatures(force=false){
 
 function updateMapViewportHint(){
   const hint=document.getElementById('mapHint');if(!hint||!mapAvailable)return;
-  const hidden=mapIsAllView&&map.getZoom()<10;
+  if(!samplePointsEnabled){
+    const visiblePolygons=renderedPolygonFeatures?.length||0;
+    hint.textContent=`Titik sampel disembunyikan • ${visiblePolygons.toLocaleString('id-ID')} dari ${mapFeatureIndex.length.toLocaleString('id-ID')} polygon di area peta.`;
+    return;
+  }
+  const hidden=map.getZoom()<(mapIsAllView?11:12);
   const visiblePoints=renderedPointEntries?.length||0;
-  const sampleText=hidden?`${mapPointIndex.length.toLocaleString('id-ID')} titik disembunyikan saat zoom jauh; perbesar untuk melihat sampel`:`${visiblePoints.toLocaleString('id-ID')} dari ${mapPointIndex.length.toLocaleString('id-ID')} titik sampel pada area peta`;
+  const sampleText=hidden?`${mapPointIndex.length.toLocaleString('id-ID')} titik disembunyikan saat zoom jauh; perbesar untuk melihat sampel`:map.getZoom()>=14&&visiblePoints>300?`${visiblePoints.toLocaleString('id-ID')} titik pada area peta; label nomor disembunyikan agar peta tetap ringan`:`${visiblePoints.toLocaleString('id-ID')} dari ${mapPointIndex.length.toLocaleString('id-ID')} titik sampel pada area peta`;
   const visiblePolygons=renderedPolygonFeatures?.length||0;
   hint.textContent=`${sampleText} • ${visiblePolygons.toLocaleString('id-ID')} dari ${mapFeatureIndex.length.toLocaleString('id-ID')} polygon di area peta.`;
 }
 
 function drawSampleMarkers(rows,allView=false,selectedSurveyor='',force=false){
   if(!markerLayer)return;
-  const suppressed=allView&&map.getZoom()<10;
+  const minPointZoom=allView?11:12;
+  const suppressed=!samplePointsEnabled||map.getZoom()<minPointZoom;
+  if(!samplePointsEnabled){
+    if(!renderedPointsSuppressed||renderedPointEntries?.length)markerLayer.clearLayers();
+    renderedPointEntries=[];renderedPointSurveyor=selectedSurveyor;
+    renderedPointLabels=false;renderedPointsSuppressed=true;updateMapViewportHint();return;
+  }
   const view=map.getBounds().pad(.08);
   const entries=suppressed?[]:mapPointIndex.filter(item=>view.contains(item.latlng));
-  const showLabels=map.getZoom()>=14;
+  const showLabels=map.getZoom()>=14&&entries.length<=300;
   if(!force&&sameObjectList(renderedPointEntries,entries)&&renderedPointSurveyor===selectedSurveyor&&renderedPointLabels===showLabels&&renderedPointsSuppressed===suppressed){updateMapViewportHint();return;}
   markerLayer.clearLayers();
   for(const entry of entries){
@@ -928,7 +947,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor='',force=false){
     const kind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
-    const marker=L.circleMarker(entry.latlng,{radius:5,color:'#4A3530',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
+    const marker=L.circleMarker(entry.latlng,{renderer:samplePointRenderer,radius:5,color:'#4A3530',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
     if(showLabels&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
       const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
@@ -1313,6 +1332,14 @@ document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
+document.getElementById('toggleSamplePointsButton').addEventListener('click',event=>{
+  samplePointsEnabled=!samplePointsEnabled;
+  const button=event.currentTarget;
+  button.textContent=samplePointsEnabled?'Sembunyikan titik sampel':'Tampilkan titik sampel';
+  button.setAttribute('aria-pressed',String(samplePointsEnabled));
+  renderedPointEntries=null;renderedPointSurveyor='';renderedPointLabels=null;renderedPointsSuppressed=null;
+  drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor,true);
+});
 document.getElementById('zoneDeadlineForm').addEventListener('submit',async event=>{
   event.preventDefault();
   const city=citySelect.value,deadline=document.getElementById('zoneDeadlineInput').value;

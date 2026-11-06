@@ -324,3 +324,5 @@ body,body.bg-calm-50{background:#FFF0BE}
 .daily-target-panel td:last-child{font-weight:700;color:#A64F48}
 .daily-target-panel td.positive{color:#A64F48}
 @media(max-width:780px){.deadline-form{display:grid;grid-template-columns:minmax(0,1fr)}.deadline-form label{min-width:0}.deadline-form input,.deadline-form .button{width:100%;min-height:44px}.daily-target-panel .section-heading{padding:15px 14px 10px}}
+.map-display-controls{display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:0}
+@media(max-width:780px){.map-display-controls{width:100%;align-items:stretch}.map-display-controls>.button{width:100%;min-height:44px}.map-display-controls .legend{justify-content:flex-start}}
