@@ -111,6 +111,44 @@ async function remoteZoneInfo(city) {
   if(error)throw error;
   const info=data?.geojson||null;remoteZoneMetadata.set(city,info);return info;
 }
+function jakartaToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const values=Object.fromEntries(parts.map(part=>[part.type,part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+function dayNumber(isoDate){
+  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate||'');
+  return match?Date.UTC(Number(match[1]),Number(match[2])-1,Number(match[3]))/86400000:NaN;
+}
+function cityDeadline(city){
+  if(!city||city==='ALL')return '';
+  const remote=remoteZoneMetadata.get(city)?._target_deadline;
+  if(remote)return remote;
+  try{return localStorage.getItem(`progress-zone-deadline:${city}`)||'';}catch{return '';}
+}
+function syncDeadlineInput(){
+  const input=document.getElementById('zoneDeadlineInput');
+  if(input)input.value=cityDeadline(citySelect.value);
+  const message=document.getElementById('zoneDeadlineMessage');
+  if(message)message.textContent=citySelect.value==='ALL'?'Pilih satu kabupaten untuk mengatur tenggat.':'';
+  if(input)input.disabled=!citySelect.value||citySelect.value==='ALL';
+  const button=document.querySelector('#zoneDeadlineForm button[type="submit"]');
+  if(button)button.disabled=!citySelect.value||citySelect.value==='ALL';
+}
+async function saveCityDeadline(city,deadline){
+  if(!city||city==='ALL')throw new Error('Pilih satu kabupaten terlebih dahulu.');
+  if(supabaseClient){
+    if(!currentUser)throw new Error('Login sebagai admin terlebih dahulu.');
+    const info=await remoteZoneInfo(city);
+    const updated={...(info||{}),_target_deadline:deadline};
+    const {data,error}=await supabaseClient.from('city_zones').upsert({city,geojson:updated,updated_by:currentUser.id},{onConflict:'city'}).select('city,updated_at').single();
+    if(error)throw error;
+    if(data?.city!==city)throw new Error('Database tidak mengonfirmasi penyimpanan tanggal target.');
+    remoteZoneMetadata.set(city,updated);
+  }else{
+    try{localStorage.setItem(`progress-zone-deadline:${city}`,deadline);}catch{throw new Error('Penyimpanan browser tidak tersedia.');}
+  }
+}
 async function fetchZoneGeo(info,pathKey) {
   if(!info)return null;
   if(!info[pathKey]){
@@ -277,6 +315,7 @@ async function saveDisplayGeo(city,geo){
 async function saveZone(city,geo) {
   if(!supabaseClient){await persistCity(city);return;}
   if(!currentUser)throw new Error('Silakan login sebagai admin sebelum mengunggah data.');
+  const existingInfo=await remoteZoneInfo(city);
   const objectName=city.toLocaleLowerCase('en-US').replace(/[^a-z0-9-]+/g,'-');
   const version=Date.now();
   const storagePath=`zones/${objectName}.geojson`;
@@ -294,12 +333,13 @@ async function saveZone(city,geo) {
     contentType:overviewFile.type,cacheControl:'60',upsert:true
   });
   if(overviewError)throw overviewError;
+  const updatedInfo={...(existingInfo||{}),_storage_path:storagePath,...overviewMetadata};
   const {data,error}=await supabaseClient.from('city_zones')
-    .upsert({city,geojson:{_storage_path:storagePath,...overviewMetadata},updated_by:currentUser.id},{onConflict:'city'})
+    .upsert({city,geojson:updatedInfo,updated_by:currentUser.id},{onConflict:'city'})
     .select('city,updated_at').single();
   if(error)throw error;
   if(data?.city!==city)throw new Error('Database tidak mengonfirmasi penyimpanan polygon untuk kabupaten ini.');
-  geoOverviewByCity[city]=overview;remoteZoneMetadata.set(city,{_storage_path:storagePath,...overviewMetadata});
+  geoOverviewByCity[city]=overview;remoteZoneMetadata.set(city,updatedInfo);
   remoteFullGeoLoaded.add(city);remoteOverviewLoaded.add(city);
 }
 
@@ -547,6 +587,62 @@ function renderTable(id, title, dates, people, valueAt) {
     tbody.append(row);
   }
   table.append(tbody);
+}
+
+function renderDailyZoneTargets(city,geo,rows,selectedPerson=''){
+  const table=document.getElementById('dailyTargetTable');
+  const hint=document.getElementById('dailyTargetHint');
+  table.replaceChildren();
+  if(!city||city==='ALL'){
+    hint.textContent='Pilih satu kabupaten untuk melihat sisa zona dan target harian per surveyor.';
+    return;
+  }
+  const deadline=cityDeadline(city);
+  const today=jakartaToday();
+  const remainingDays=deadline?dayNumber(deadline)-dayNumber(today)+1:NaN;
+  const featureOwners=new Map();
+  for(const feature of geo?.features||[]){
+    const zone=featureZone(feature);if(zone==null)continue;
+    const id=idKey(zone);
+    if(!featureOwners.has(id))featureOwners.set(id,new Set());
+    for(const owner of unique(feature.properties?._zone_surveyors||[]))featureOwners.get(id).add(owner);
+  }
+  const knownZones=new Set(featureOwners.keys());
+  const calculation=calculate(rows,TARGET_SAMPLES_PER_ZONE,knownZones);
+  const grouped=new Map();
+  for(const [zone,owners] of featureOwners){
+    const owner=owners.size===1?[...owners][0]:owners.size>1?'Kolaborasi':'Belum ditetapkan';
+    if(!grouped.has(owner))grouped.set(owner,{total:0,remaining:0});
+    const group=grouped.get(owner);group.total++;
+    if(!calculation.completed.has(zone))group.remaining++;
+  }
+  const entries=[...grouped.entries()].sort((a,b)=>a[0].localeCompare(b[0],'id'))
+    .filter(([owner])=>!selectedPerson||owner===selectedPerson);
+  const head=document.createElement('thead');
+  const headRow=document.createElement('tr');
+  for(const label of ['Surveyor pemilik zona','Total zona','Sisa zona','Hari kalender','Target zona/hari']){
+    const th=document.createElement('th');th.textContent=label;headRow.append(th);
+  }
+  head.append(headRow);table.append(head);
+  const body=document.createElement('tbody');
+  for(const [owner,counts] of entries){
+    const row=document.createElement('tr');
+    const values=[owner,counts.total.toLocaleString('id-ID'),counts.remaining.toLocaleString('id-ID'),
+      !deadline?'—':remainingDays>0?remainingDays.toLocaleString('id-ID'):remainingDays===0?'0':'Tenggat lewat',
+      !deadline?'—':remainingDays<=0?'—':`${Math.ceil(counts.remaining/remainingDays).toLocaleString('id-ID')} zona`];
+    for(const value of values){const td=document.createElement('td');td.textContent=value;row.append(td);}
+    if(counts.remaining===0&&deadline){row.lastChild.textContent='0 zona';row.lastChild.className='positive';}
+    body.append(row);
+  }
+  table.append(body);
+  if(!entries.length){
+    const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=5;
+    cell.textContent=knownZones.size?'Tidak ada zona untuk surveyor yang dipilih.':'Zona belum dimuat atau belum memiliki data pembagian per surveyor.';
+    row.append(cell);body.append(row);
+  }
+  if(!deadline)hint.textContent='Admin perlu mengisi tanggal target selesai untuk kabupaten ini. Target harian dihitung otomatis dari sisa zona.';
+  else if(remainingDays>0)hint.textContent=`${city} • tenggat ${fmtDate(deadline)} • hitung kalender inklusif dari hari ini (${fmtDate(today)}), termasuk akhir pekan.`;
+  else hint.textContent=`Tenggat ${fmtDate(deadline)} sudah lewat. Atur tanggal baru di halaman Admin untuk menghitung ulang target.`;
 }
 
 function renderZoneSampleList(geo, calculation) {
@@ -918,6 +1014,7 @@ function update() {
   const sampleCounts=new Map();
   for (const r of points) { const k=`${r.date}\u0000${r.surveyor}`; sampleCounts.set(k,(sampleCounts.get(k)||0)+1); }
   renderTable('sampleTable','sampel',dates,people,(d,p)=>sampleCounts.get(`${d}\u0000${p}`));
+  renderDailyZoneTargets(city,allGeo,source,selectedPerson);
   renderZoneSampleList(geo,zoneCalc);
   renderMap(filtered,zoneCalc,geo,selectedPerson?source:filtered,selectedPerson);
   document.getElementById('otherSurveyorLegend').hidden=!selectedPerson;
@@ -1058,7 +1155,7 @@ citySelect.addEventListener('change',async()=>{
     finally{if(request===citySelectionRequest)endLoading();}
   }
   if(request!==citySelectionRequest)return;
-  rebuildFilters();update();
+  rebuildFilters();syncDeadlineInput();update();
   if(loadError)statusLine.textContent=loadError;
 });
 surveyorSelect.addEventListener('change',update);
@@ -1193,6 +1290,20 @@ document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
+document.getElementById('zoneDeadlineForm').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const city=citySelect.value,deadline=document.getElementById('zoneDeadlineInput').value;
+  const message=document.getElementById('zoneDeadlineMessage');
+  const button=event.currentTarget.querySelector('button[type="submit"]');
+  if(!deadline){message.textContent='Pilih tanggal target selesai terlebih dahulu.';return;}
+  button.disabled=true;message.textContent='Menyimpan tanggal target…';
+  try{
+    await saveCityDeadline(city,deadline);
+    message.textContent=`Tenggat ${fmtDate(deadline)} tersimpan untuk ${city}.`;
+    update();
+  }catch(error){message.textContent=`Tanggal target gagal disimpan: ${error.message||error}`;}
+  finally{button.disabled=!citySelect.value||citySelect.value==='ALL';}
+});
 setPasswordForm.addEventListener('submit',async event=>{
   event.preventDefault();
   const email=document.getElementById('inviteEmail').value.trim();
@@ -1242,7 +1353,7 @@ document.getElementById('migrateLocalButton').addEventListener('click',async()=>
   const button=document.getElementById('migrateLocalButton'); button.disabled=true; statusLine.textContent='Mengimpor data lama dari browser ke database…';
   try{
     for(const [city,legacy] of Object.entries(legacyBrowserData)){
-      if(legacy.geo){const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:legacy.geo,updated_by:currentUser.id},{onConflict:'city'});if(error)throw error;}
+      if(legacy.geo){const existingInfo=await remoteZoneInfo(city);const mergedGeo=existingInfo?{...legacy.geo,_target_deadline:existingInfo._target_deadline}:legacy.geo;const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:mergedGeo,updated_by:currentUser.id},{onConflict:'city'});if(error)throw error;}
       if(legacy.rows?.length)await upsertRemoteSamples(city,legacy.rows);
     }
     legacyBrowserData={}; button.hidden=true; await loadRemoteData(); rebuildFilters(); update();
@@ -1288,11 +1399,13 @@ async function init() {
       }
       beginLoading('Menghubungkan ke database…');
       await loadRemoteData();
+      syncDeadlineInput();
       endLoading();
       statusLine.textContent='Terhubung ke database bersama. Data akan diperbarui untuk semua pengguna setelah unggahan admin berhasil.';
     }catch(error){endLoading();statusLine.textContent=`Database belum dapat dimuat: ${error.message||error}. Periksa konfigurasi database.`;}
   }else{
     await restoreStoredData();
+    syncDeadlineInput();
     statusLine.textContent='Database belum dikonfigurasi. Data belum tersinkron antar pengguna.';
     document.getElementById('adminMessage').textContent='Database belum dikonfigurasi. Isi URL dan publishable key terlebih dahulu.';
   }
