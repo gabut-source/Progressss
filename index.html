@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=warm-palette-8">
+  <link rel="stylesheet" href="style.css?v=warm-palette-9">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
@@ -66,6 +66,7 @@
         <p class="text-sm text-slate-500">GeoJSON tampilan terpisah hanya untuk peta. Untuk ukuran lebih ringan, unggah hasil Simplify Shared Edges dari ArcGIS Pro dalam WGS84 dengan daftar NOZN yang sama. Tombol di atas membuat tampilan dari geometri zona utama tanpa menyederhanakan bentuk.</p>
         <section class="table-panel daily-target-panel">
           <div class="section-heading"><div><h2>Target zona per hari per surveyor</h2><p id="dailyTargetHint">Pilih satu kabupaten untuk melihat kebutuhan zona per hari sampai tenggat.</p></div></div>
+          <p id="dailyTargetSummary" class="daily-target-summary" aria-live="polite"></p>
           <div class="table-wrap"><table id="dailyTargetTable"></table></div>
         </section>
       </div>
@@ -127,6 +128,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=daily-zone-target-1"></script>
+  <script src="app.js?v=daily-zone-target-average-2"></script>
 </body>
 </html>

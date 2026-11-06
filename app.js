@@ -592,20 +592,26 @@ function renderTable(id, title, dates, people, valueAt) {
 function renderDailyZoneTargets(city,geo,rows,selectedPerson=''){
   const table=document.getElementById('dailyTargetTable');
   const hint=document.getElementById('dailyTargetHint');
+  const summary=document.getElementById('dailyTargetSummary');
   table.replaceChildren();
   if(!city||city==='ALL'){
     hint.textContent='Pilih satu kabupaten untuk melihat sisa zona dan target harian per surveyor.';
+    summary.textContent='';
     return;
   }
   const deadline=cityDeadline(city);
   const today=jakartaToday();
   const remainingDays=deadline?dayNumber(deadline)-dayNumber(today)+1:NaN;
   const featureOwners=new Map();
+  const currentSurveyors=new Set();
   for(const feature of geo?.features||[]){
     const zone=featureZone(feature);if(zone==null)continue;
     const id=idKey(zone);
     if(!featureOwners.has(id))featureOwners.set(id,new Set());
-    for(const owner of unique(feature.properties?._zone_surveyors||[]))featureOwners.get(id).add(owner);
+    for(const owner of unique(feature.properties?._zone_surveyors||[])){
+      featureOwners.get(id).add(owner);
+      if(owner!=='Kolaborasi'&&owner!=='Belum ditetapkan')currentSurveyors.add(owner);
+    }
   }
   const knownZones=new Set(featureOwners.keys());
   const calculation=calculate(rows,TARGET_SAMPLES_PER_ZONE,knownZones);
@@ -616,6 +622,9 @@ function renderDailyZoneTargets(city,geo,rows,selectedPerson=''){
     const group=grouped.get(owner);group.total++;
     if(!calculation.completed.has(zone))group.remaining++;
   }
+  if(!currentSurveyors.size)for(const person of unique(rows.map(row=>row.surveyor)))currentSurveyors.add(person);
+  const totalRemaining=[...grouped.values()].reduce((total,group)=>total+group.remaining,0);
+  const surveyorCount=currentSurveyors.size;
   const entries=[...grouped.entries()].sort((a,b)=>a[0].localeCompare(b[0],'id'))
     .filter(([owner])=>!selectedPerson||owner===selectedPerson);
   const head=document.createElement('thead');
@@ -640,9 +649,20 @@ function renderDailyZoneTargets(city,geo,rows,selectedPerson=''){
     cell.textContent=knownZones.size?'Tidak ada zona untuk surveyor yang dipilih.':'Zona belum dimuat atau belum memiliki data pembagian per surveyor.';
     row.append(cell);body.append(row);
   }
-  if(!deadline)hint.textContent='Admin perlu mengisi tanggal target selesai untuk kabupaten ini. Target harian dihitung otomatis dari sisa zona.';
-  else if(remainingDays>0)hint.textContent=`${city} • tenggat ${fmtDate(deadline)} • hitung kalender inklusif dari hari ini (${fmtDate(today)}), termasuk akhir pekan.`;
-  else hint.textContent=`Tenggat ${fmtDate(deadline)} sudah lewat. Atur tanggal baru di halaman Admin untuk menghitung ulang target.`;
+  if(!deadline){
+    hint.textContent='Admin perlu mengisi tanggal target selesai untuk kabupaten ini. Target harian dihitung otomatis dari sisa zona.';
+    summary.textContent='Isi tanggal tenggat untuk menghitung rata-rata target total per surveyor.';
+  }else if(remainingDays>0){
+    hint.textContent='';
+    if(surveyorCount){
+      const average=totalRemaining/remainingDays/surveyorCount;
+      const formattedAverage=average.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
+      summary.textContent=`Rata-rata target seluruh kabupaten: ${totalRemaining.toLocaleString('id-ID')} sisa zona ÷ ${remainingDays.toLocaleString('id-ID')} hari ÷ ${surveyorCount.toLocaleString('id-ID')} surveyor = ${formattedAverage} zona/surveyor/hari.`;
+    }else summary.textContent='Belum ada surveyor yang dapat dihitung untuk kabupaten ini.';
+  }else{
+    hint.textContent=`Tenggat ${fmtDate(deadline)} sudah lewat. Atur tanggal baru di halaman Admin untuk menghitung ulang target.`;
+    summary.textContent=`Total sisa zona kabupaten: ${totalRemaining.toLocaleString('id-ID')} • target rata-rata harian tidak dihitung karena tenggat sudah lewat.`;
+  }
 }
 
 function renderZoneSampleList(geo, calculation) {
@@ -872,10 +892,13 @@ function renderVisibleMapFeatures(force=false){
         const n=z==null?0:(currentCalculation?.zoneSampleCounts.get(id)||0);
         const owners=unique(feature.properties?._zone_surveyors||[]);
         const ownerText=owners.length?owners.map(escapeHtml).join(', '):'Belum ditetapkan';
+        const multipart=feature.geometry?.type==='MultiPolygon';
+        const partCount=multipart?(feature.geometry.coordinates||[]).length:1;
+        const geometryText=multipart?`Multipart • ${partCount.toLocaleString('id-ID')} bagian`:'Polygon tunggal';
         const credit=currentCalculation?.zoneAwardsByZone?.get(id);
         const creditText=credit?`<br>Rekap pemilik: ${escapeHtml(credit.surveyor)} • ${escapeHtml(fmtDate(credit.date))}`:'';
         if(id){if(!zoneLayersById.has(id))zoneLayersById.set(id,[]);zoneLayersById.get(id).push(layer);}
-        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Pemilik zona saat ini: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}${creditText}`);
+        layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Geometri: ${geometryText}<br>Pemilik zona saat ini: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}${creditText}`);
       }
     }).addTo(map);
   }

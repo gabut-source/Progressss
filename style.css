@@ -320,6 +320,7 @@ body,body.bg-calm-50{background:#FFF0BE}
 .deadline-form [role="status"]{flex-basis:100%;color:#765B54;font-size:12px}
 .daily-target-panel{margin-bottom:16px}
 .daily-target-panel .table-wrap{max-height:280px}
+.daily-target-summary{margin:0 14px 12px;padding:10px 12px;border:1px solid #FFB399;border-radius:10px;background:#FFF0BE;color:#4A3530;font-size:13px;font-weight:700;line-height:1.5}
 .daily-target-panel td:last-child{font-weight:700;color:#A64F48}
 .daily-target-panel td.positive{color:#A64F48}
 @media(max-width:780px){.deadline-form{display:grid;grid-template-columns:minmax(0,1fr)}.deadline-form label{min-width:0}.deadline-form input,.deadline-form .button{width:100%;min-height:44px}.daily-target-panel .section-heading{padding:15px 14px 10px}}
