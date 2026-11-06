@@ -7,10 +7,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=warm-palette-10">
+  <link rel="stylesheet" href="style.css?v=ui-ux-polish-2">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
+    <h1>Progress</h1>
     <div class="header-actions">
       <button id="adminToggle" class="button secondary transition duration-200 hover:-translate-y-0.5 hover:shadow-md" type="button">Admin</button>
     </div>
@@ -35,40 +36,62 @@
       </form>
       <div id="adminTools" class="admin-tools" hidden>
         <p class="admin-city-note">Unggahan akan masuk ke kabupaten yang sedang dipilih: <strong id="adminCityName">Pamekasan</strong>.</p>
-        <form id="zoneDeadlineForm" class="deadline-form">
-          <label for="zoneDeadlineInput">Tanggal target selesai zona</label>
-          <input id="zoneDeadlineInput" type="date" required>
-          <button class="button secondary" type="submit">Simpan tenggat</button>
-          <span id="zoneDeadlineMessage" role="status" aria-live="polite"></span>
-        </form>
-        <div class="header-actions">
-          <button id="geoUploadButton" class="button primary" type="button">Unggah ZIP SHP zona</button>
-          <dialog id="zoneUploadDialog" class="zone-upload-dialog" aria-labelledby="zoneUploadTitle">
-            <h3 id="zoneUploadTitle">Pilih jenis unggahan zona</h3>
-            <p>Unggah polygon keseluruhan kabupaten atau polygon yang dibagi per surveyor.</p>
-            <div class="header-actions">
-              <button class="button primary" type="button" data-zone-upload-mode="overall">Zona keseluruhan</button>
-              <button class="button secondary" type="button" data-zone-upload-mode="surveyor">Zona per surveyor</button>
-              <button class="button ghost" type="button" data-zone-upload-cancel>Batalkan</button>
+        <div class="admin-groups">
+          <section class="admin-group">
+            <h3>Tenggat target</h3>
+            <p>Tanggal berlaku untuk kabupaten yang sedang dipilih.</p>
+            <form id="zoneDeadlineForm" class="deadline-form">
+              <label for="zoneDeadlineInput">Tanggal target selesai zona</label>
+              <input id="zoneDeadlineInput" type="date" required>
+              <button class="button secondary" type="submit">Simpan tenggat</button>
+              <span id="zoneDeadlineMessage" role="status" aria-live="polite"></span>
+            </form>
+          </section>
+          <section class="admin-group">
+            <h3>Zona</h3>
+            <p>Kelola zona utama dan GeoJSON khusus tampilan peta.</p>
+            <div class="admin-group-actions">
+              <button id="geoUploadButton" class="button primary" type="button">Unggah ZIP SHP zona</button>
+              <dialog id="zoneUploadDialog" class="zone-upload-dialog" aria-labelledby="zoneUploadTitle">
+                <h3 id="zoneUploadTitle">Pilih jenis unggahan zona</h3>
+                <p>Unggah polygon keseluruhan kabupaten atau polygon yang dibagi per surveyor.</p>
+                <div class="header-actions">
+                  <button class="button primary" type="button" data-zone-upload-mode="overall">Zona keseluruhan</button>
+                  <button class="button secondary" type="button" data-zone-upload-mode="surveyor">Zona per surveyor</button>
+                  <button class="button ghost" type="button" data-zone-upload-cancel>Batalkan</button>
+                </div>
+              </dialog>
+              <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
+              <label class="button secondary" for="displayGeoInput">Unggah GeoJSON tampilan ringan</label>
+              <input id="displayGeoInput" type="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
+              <button id="prepareOverviewButton" class="button secondary" type="button">Buat GeoJSON tampilan dari zona utama</button>
             </div>
-          </dialog>
-          <input id="geoInput" type="file" accept=".zip,.geojson,.json,application/zip,application/geo+json" hidden>
-          <label class="button secondary" for="displayGeoInput">Unggah GeoJSON tampilan ringan</label>
-          <input id="displayGeoInput" type="file" accept=".geojson,.json,application/geo+json,application/json" hidden>
-          <label class="button secondary" for="shpInput">Tambah SHP sampel</label>
-          <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
-          <label class="button secondary" for="excelInput">Tambah Excel</label>
-          <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
-          <button id="prepareOverviewButton" class="button secondary" type="button">Buat GeoJSON tampilan dari zona utama</button>
-          <button id="migrateLocalButton" class="button secondary" type="button" hidden>Impor data lama dari browser</button>
-          <button id="adminLogout" class="button ghost" type="button">Keluar</button>
+            <p class="admin-group-note">Untuk peta yang lebih ringan, unggah hasil Simplify Shared Edges dari ArcGIS Pro dalam WGS84 dengan daftar NOZN yang sama. Membuat GeoJSON tampilan dari zona utama tidak menyederhanakan geometri.</p>
+          </section>
+          <section class="admin-group">
+            <h3>Titik sampel</h3>
+            <p>Unggah data titik sampel atau rekap dari file Excel/CSV.</p>
+            <div class="admin-group-actions">
+              <label class="button secondary" for="shpInput">Tambah SHP sampel</label>
+              <input id="shpInput" type="file" accept=".zip,application/zip" hidden>
+              <label class="button secondary" for="excelInput">Tambah Excel/CSV</label>
+              <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+            </div>
+          </section>
+          <section id="legacyDataGroup" class="admin-group" hidden>
+            <h3>Data lama</h3>
+            <p>Gunakan hanya jika perlu mengimpor data tersimpan di browser ini.</p>
+            <div class="admin-group-actions">
+              <button id="migrateLocalButton" class="button secondary" type="button">Impor data lama dari browser</button>
+            </div>
+          </section>
         </div>
-        <p class="text-sm text-slate-500">GeoJSON tampilan terpisah hanya untuk peta. Untuk ukuran lebih ringan, unggah hasil Simplify Shared Edges dari ArcGIS Pro dalam WGS84 dengan daftar NOZN yang sama. Tombol di atas membuat tampilan dari geometri zona utama tanpa menyederhanakan bentuk.</p>
         <section class="table-panel daily-target-panel">
           <div class="section-heading"><div><h2>Target zona per hari per surveyor</h2><p id="dailyTargetHint">Pilih satu kabupaten untuk melihat kebutuhan zona per hari sampai tenggat.</p></div></div>
           <p id="dailyTargetSummary" class="daily-target-summary" aria-live="polite"></p>
           <div class="table-wrap"><table id="dailyTargetTable"></table></div>
         </section>
+        <div class="admin-logout-row"><button id="adminLogout" class="button ghost" type="button">Keluar dari Admin</button></div>
       </div>
     </section>
 
@@ -115,11 +138,11 @@
         <div class="table-wrap"><table id="zoneSampleTable"></table></div>
       </article>
       <article class="table-panel">
-        <div class="section-heading"><div><h2>Zona tercapai per surveyor</h2><p>Rekap tanggal mengikuti surveyor yang sampelnya pertama kali membawa zona mencapai 3. Progres tanggung jawab mengikuti pemilik zona terbaru dan menghitung sampel semua surveyor.</p></div></div>
+        <div class="section-heading"><div><h2>Zona tercapai per surveyor</h2><p>Rekap tanggal mengikuti surveyor yang sampelnya pertama kali membawa zona mencapai 3. Progres tanggung jawab mengikuti pemilik zona terbaru dan menghitung sampel semua surveyor. Tanggal terbaru tampil di kiri; geser tabel untuk tanggal lainnya.</p></div></div>
         <div class="table-wrap"><table id="zoneTable"></table></div>
       </article>
       <article class="table-panel">
-        <div class="section-heading"><div><h2>Titik sampel per surveyor</h2><p>Jumlah titik unik yang dikumpulkan per tanggal.</p></div></div>
+        <div class="section-heading"><div><h2>Titik sampel per surveyor</h2><p>Jumlah titik unik per tanggal. Tanggal terbaru tampil di kiri; geser tabel untuk tanggal lainnya.</p></div></div>
         <div class="table-wrap"><table id="sampleTable"></table></div>
       </article>
     </section>
@@ -131,6 +154,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=sample-point-performance-1"></script>
+  <script src="app.js?v=ui-ux-polish-2"></script>
 </body>
 </html>

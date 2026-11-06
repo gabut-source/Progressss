@@ -597,6 +597,15 @@ function renderTable(id, title, dates, people, valueAt) {
   table.append(tbody);
 }
 
+function syncSamplePointsButton(){
+  const button=document.getElementById('toggleSamplePointsButton');
+  if(!button)return;
+  const waitingForZoom=samplePointsEnabled&&mapAvailable&&mapPointIndex.length>0&&map.getZoom()<(mapIsAllView?11:12);
+  button.textContent=!samplePointsEnabled?'Tampilkan titik sampel':waitingForZoom?'Titik sampel aktif':'Sembunyikan titik sampel';
+  button.title=!samplePointsEnabled?'Klik untuk menampilkan titik sampel di peta':'Klik untuk menyembunyikan titik sampel di peta';
+  button.setAttribute('aria-pressed',String(samplePointsEnabled));
+}
+
 function renderDailyZoneTargets(city,geo,rows,selectedPerson=''){
   const table=document.getElementById('dailyTargetTable');
   const hint=document.getElementById('dailyTargetHint');
@@ -916,6 +925,7 @@ function renderVisibleMapFeatures(force=false){
 
 function updateMapViewportHint(){
   const hint=document.getElementById('mapHint');if(!hint||!mapAvailable)return;
+  syncSamplePointsButton();
   if(!samplePointsEnabled){
     const visiblePolygons=renderedPolygonFeatures?.length||0;
     hint.textContent=`Titik sampel disembunyikan • ${visiblePolygons.toLocaleString('id-ID')} dari ${mapFeatureIndex.length.toLocaleString('id-ID')} polygon di area peta.`;
@@ -1020,7 +1030,7 @@ function update() {
   const knownZones=new Set(geo?unique((geo.features||[]).map(featureZone).filter(v=>v!=null).map(idKey)):[]);
   const calc=calculate(filtered,threshold,knownZones);
   const points=dedupPoints(filtered); const people=selectedPerson?[selectedPerson]:unique(source.map(r=>r.surveyor)).sort((a,b)=>a.localeCompare(b,'id'));
-  const dates=allDates(filtered);
+  const dates=allDates(filtered).reverse();
   const hasAssignedZones=(allGeo?.features||[]).some(feature=>Array.isArray(feature.properties?._zone_surveyors));
   document.getElementById('zonesTotalLabel').textContent=selectedPerson&&hasAssignedZones?`Zona tanggung jawab ${selectedPerson}`:'Total zona keseluruhan';
   document.getElementById('zonesTotalHint').textContent=selectedPerson&&hasAssignedZones?'Mengikuti pembagian zona terbaru':'Polygon kabupaten terpilih';
@@ -1047,7 +1057,7 @@ function update() {
   // brought the zone to the target. Current-owner progress is calculated
   // separately above from the latest zone assignment and all surveyor samples.
   const awardCalc=sampleCalc;
-  const awardDates=allDates(source);
+  const awardDates=allDates(source).reverse();
   const awardOwners=[...awardCalc.awards.keys()].map(key=>key.split('\u0000')[1]).filter(person=>person&&person!=='Kolaborasi');
   const awardPeople=unique([...source.map(r=>r.surveyor),...awardOwners]).sort((a,b)=>a.localeCompare(b,'id'));
   const hasCollaboration=[...awardCalc.awards.keys()].some(k=>k.endsWith('\u0000Kolaborasi'));
@@ -1406,7 +1416,7 @@ document.getElementById('migrateLocalButton').addEventListener('click',async()=>
       if(legacy.geo){const existingInfo=await remoteZoneInfo(city);const mergedGeo=existingInfo?{...legacy.geo,_target_deadline:existingInfo._target_deadline}:legacy.geo;const {error}=await supabaseClient.from('city_zones').upsert({city,geojson:mergedGeo,updated_by:currentUser.id},{onConflict:'city'});if(error)throw error;}
       if(legacy.rows?.length)await upsertRemoteSamples(city,legacy.rows);
     }
-    legacyBrowserData={}; button.hidden=true; await loadRemoteData(); rebuildFilters(); update();
+    legacyBrowserData={}; document.getElementById('legacyDataGroup').hidden=true; await loadRemoteData(); rebuildFilters(); update();
     statusLine.textContent='Data lama dari browser berhasil diimpor ke database bersama.';
   }catch(error){statusLine.textContent=`Impor data lama gagal: ${error.message||error}`;}
   finally{button.disabled=false;}
@@ -1431,7 +1441,7 @@ async function init() {
     try{
       await restoreStoredData();
       legacyBrowserData=JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(rowsByCity).map(([city,rows])=>[city,{rows,geo:geoByCity[city]||null}]))));
-      document.getElementById('migrateLocalButton').hidden=!Object.values(legacyBrowserData).some(item=>item.rows.length||item.geo);
+      document.getElementById('legacyDataGroup').hidden=!Object.values(legacyBrowserData).some(item=>item.rows.length||item.geo);
       const {data,error}=await supabaseClient.auth.getSession(); if(error)throw error;
       if(invitationFlowAtLoad&&data.session){
         adminPanel.hidden=false;adminLogin.hidden=true;adminTools.hidden=true;setPasswordForm.hidden=false;
