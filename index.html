@@ -121,7 +121,7 @@
         <div><h2>Peta zona dan titik sampel</h2><p id="mapHint">Titik sampel mengikuti kabupaten dan surveyor terpilih.</p></div>
         <div class="map-display-controls">
           <button id="toggleSamplePointsButton" class="button secondary" type="button" aria-pressed="true">Sembunyikan titik sampel</button>
-          <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="dot individual-dot"></i>Individual</span><span id="otherSurveyorLegend" hidden><i class="dot other-surveyor-dot"></i>Titik Sampel Surveyor Lain</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span></div>
+          <div class="legend"><span><i class="dot sample-dot"></i>Titik sampel</span><span><i class="dot individual-dot"></i>Individual</span><span id="otherSurveyorLegend" hidden><i class="dot other-surveyor-dot"></i>Titik Sampel Surveyor Lain</span><span><i class="swatch done"></i>Zona tercapai</span><span><i class="swatch pending"></i>Belum tercapai</span><span><i class="swatch selected-zone"></i>Zona dipilih</span></div>
         </div>
       </div>
       <div id="map" role="application" aria-label="Peta polygon zona dan titik sampel"></div>
@@ -154,6 +154,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=polygon-click-renderer-1"></script>
+  <script src="app.js?v=polygon-highlight-multipart-1"></script>
 </body>
 </html>
