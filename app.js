@@ -441,6 +441,10 @@ if (mapAvailable) {
     return container;
   };
   locateControl.addTo(map);
+  // Canvas hit-testing can be unreliable on dense, touch-heavy maps. Resolve a
+  // map tap against the polygon geometry as a fallback so mobile users can
+  // still select a zone even when Leaflet does not report the path layer.
+  map.on('click',handleZoneMapTap);
   map.on('moveend',()=>{
     if(mapRenderFrame)return;
     mapRenderFrame=requestAnimationFrame(()=>{
@@ -947,6 +951,21 @@ function zoneMapStyle(feature){
 function highlightZoneOnMap(zoneId){
   selectedZoneId=zoneId;
   for(const [id,layers] of zoneLayersById)for(const layer of layers)layer.setStyle(zoneMapStyle(layer.feature));
+}
+function handleZoneMapTap(event){
+  if(event.layer?._progressRow)return; // Preserve sample marker popups.
+  const directFeature=event.layer?.feature;
+  let zoneId=directFeature?featureZone(directFeature):null;
+  if(zoneId==null&&event.latlng){
+    const {lat,lng}=event.latlng;
+    const hit=mapFeatureIndex.find(item=>item.bounds.contains(event.latlng)&&pointInPolygonGeometry([lng,lat],item.feature.geometry));
+    if(hit)zoneId=featureZone(hit.feature);
+  }
+  if(zoneId==null)return;
+  const id=idKey(zoneId);
+  highlightZoneOnMap(id);
+  const layer=zoneLayersById.get(id)?.[0];
+  if(layer)layer.openPopup(event.latlng);
 }
 function renderVisibleMapFeatures(force=false){
   if(!mapAvailable)return;
