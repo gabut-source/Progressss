@@ -755,6 +755,50 @@ function zoomToZone(id) {
   openPopup();
 }
 
+function closeSampleSearchResults(){
+  const results=document.getElementById('sampleSearchResults');
+  const input=document.getElementById('sampleSearchInput');
+  if(results){results.hidden=true;results.replaceChildren();}
+  input?.setAttribute('aria-expanded','false');
+}
+function renderSampleSearchResults(query){
+  const input=document.getElementById('sampleSearchInput');
+  const results=document.getElementById('sampleSearchResults');
+  const hint=document.getElementById('sampleSearchHint');
+  if(!input||!results||!hint)return;
+  results.replaceChildren();
+  const needle=String(query||'').trim().toLocaleLowerCase('id-ID');
+  if(!needle){closeSampleSearchResults();hint.textContent='Cari berdasarkan nomor sampel pada kabupaten yang dipilih.';return;}
+  const matches=mapPointIndex.filter(item=>String(item.row.sample??'').toLocaleLowerCase('id-ID').includes(needle)).slice(0,30);
+  if(!matches.length){closeSampleSearchResults();hint.textContent='Nomor sampel tidak ditemukan. Pastikan kabupaten sudah dipilih dan titik memiliki koordinat.';return;}
+  for(const item of matches){
+    const row=item.row,button=document.createElement('button');
+    button.type='button';button.setAttribute('role','option');
+    const title=document.createElement('strong');title.textContent=`No. sampel ${row.sample}`;
+    const detail=document.createElement('span');detail.textContent=`Zona ${row.zone||'—'} • ${row.surveyor||'Surveyor tidak diketahui'} • ${fmtDate(row.date)}`;
+    button.append(title,detail);
+    button.addEventListener('click',()=>zoomToSample(item));
+    results.append(button);
+  }
+  results.hidden=false;input.setAttribute('aria-expanded','true');
+  hint.textContent=matches.length===30?'Menampilkan 30 hasil pertama; tambahkan digit agar pencarian lebih spesifik.':`${matches.length} titik ditemukan. Pilih titik untuk zoom pada peta.`;
+}
+function zoomToSample(item){
+  if(!item||!mapAvailable)return;
+  if(!samplePointsEnabled){samplePointsEnabled=true;syncSamplePointsButton();}
+  const targetZoom=Math.max(map.getZoom(),15);
+  map.setView(item.latlng,targetZoom,{animate:false});
+  renderVisibleMapFeatures();
+  drawSampleMarkers(mapRowsForRender,mapIsAllView,mapSelectedSurveyor,true);
+  // Marker instances are created in drawSampleMarkers; locate the one by the
+  // unique sample record so duplicate sample numbers remain individually searchable.
+  const matches=markerLayer?.getLayers?.()||[];
+  const marker=matches.find(layer=>layer._progressRow===item.row);
+  if(marker)marker.openPopup();
+  else map.once('moveend',()=>{const found=(markerLayer?.getLayers?.()||[]).find(layer=>layer._progressRow===item.row);found?.openPopup();});
+  closeSampleSearchResults();
+}
+
 function featureZone(feature) {
   const p=feature.properties||{};
   if(p._progress_zone!=null&&p._progress_zone!=='')return p._progress_zone;
@@ -889,6 +933,8 @@ function renderMap(rows, calculation, geoOverride, markerRows=rows, selectedSurv
   renderVisibleMapFeatures();
   drawSampleMarkers(markerRows,mapIsAllView,selectedSurveyor);
   updateMapViewportHint();
+  const searchInput=document.getElementById('sampleSearchInput');
+  if(searchInput?.value)renderSampleSearchResults(searchInput.value);
 }
 
 function sameObjectList(first,second){return Array.isArray(first)&&first.length===second.length&&first.every((item,index)=>item===second[index]);}
@@ -968,6 +1014,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor='',force=false){
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
     const marker=L.circleMarker(entry.latlng,{renderer:samplePointRenderer,radius:5,color:'#4A3530',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
+    marker._progressRow=r;
     if(showLabels&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
       const dataKind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
@@ -1351,6 +1398,14 @@ document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
   if(row){event.preventDefault();zoomToZone(row.dataset.zoneId);}
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
+document.getElementById('sampleSearchInput').addEventListener('input',event=>renderSampleSearchResults(event.currentTarget.value));
+document.getElementById('sampleSearchInput').addEventListener('keydown',event=>{
+  if(event.key==='Escape')closeSampleSearchResults();
+  if(event.key==='Enter'){
+    const first=document.querySelector('#sampleSearchResults button');
+    if(first){event.preventDefault();first.click();}
+  }
+});
 document.getElementById('adminToggle').addEventListener('click',()=>{adminPanel.hidden=!adminPanel.hidden;});
 document.getElementById('toggleSamplePointsButton').addEventListener('click',event=>{
   samplePointsEnabled=!samplePointsEnabled;
