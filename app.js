@@ -22,7 +22,7 @@ let renderedPointEntries=null;
 let renderedPointSurveyor='';
 let renderedPointLabels=null;
 let renderedPointsSuppressed=null;
-const THEME_COLORS={primary:'#4682A9',secondary:'#91C8E4',light:'#749BC2',pale:'#FFFBDE',sample:'#D62828',individual:'#7B2CBF',otherSurveyor:'#FF00A8'};
+const THEME_COLORS={primary:'#6EACDA',secondary:'#6EACDA',light:'#6EACDA',pale:'#E2E2B6',sample:'#EF4444',individual:'#E2E2B6',otherSurveyor:'#D946EF'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -945,8 +945,8 @@ function sameObjectList(first,second){return Array.isArray(first)&&first.length=
 function zoneMapStyle(feature){
   const zone=featureZone(feature),id=zone==null?'':idKey(zone);
   const done=zone!=null&&currentCalculation?.completed.has(id);
-  if(id&&id===selectedZoneId)return {color:'#FF6B00',weight:4,fillColor:'#FF9D45',fillOpacity:.58};
-  return {color:done?'#4682A9':'#749BC2',weight:mapIsAllView ? 1 : 1.7,fillColor:done?'#91C8E4':'#FFFBDE',fillOpacity:mapIsAllView ? .34 : .48};
+  if(id&&id===selectedZoneId)return {color:'#FFF7CC',weight:4,fillColor:'#F59E0B',fillOpacity:.68};
+  return {color:'#021526',weight:mapIsAllView ? 1.1 : 1.8,fillColor:done?'#6EACDA':'#E2E2B6',fillOpacity:mapIsAllView ? .42 : .56};
 }
 function highlightZoneOnMap(zoneId){
   selectedZoneId=zoneId;
@@ -1044,7 +1044,7 @@ function drawSampleMarkers(rows,allView=false,selectedSurveyor='',force=false){
     const kind=propertyValue(r.properties,['JENIS_DATA','JENISDATA']);
     const isIndividual=kind!=null&&normalizedField(kind)==='individual';
     const isOtherSurveyor=Boolean(selectedSurveyor)&&r.surveyor!==selectedSurveyor;
-    const marker=L.circleMarker(entry.latlng,{renderer:samplePointRenderer,radius:5,color:'#4A3530',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
+    const marker=L.circleMarker(entry.latlng,{renderer:samplePointRenderer,radius:5,color:'#021526',weight:1.5,fillColor:isOtherSurveyor?THEME_COLORS.otherSurveyor:isIndividual?THEME_COLORS.individual:THEME_COLORS.sample,fillOpacity:.98});
     marker._progressRow=r;
     if(showLabels&&r.sample!=null&&r.sample!=='')marker.bindTooltip(escapeHtml(r.sample),{permanent:true,direction:'top',offset:[0,-4],className:'sample-number-label',opacity:.96});
     marker.bindPopup(()=>{
