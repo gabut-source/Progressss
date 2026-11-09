@@ -22,7 +22,7 @@ let renderedPointEntries=null;
 let renderedPointSurveyor='';
 let renderedPointLabels=null;
 let renderedPointsSuppressed=null;
-const THEME_COLORS={primary:'#FF9A86',secondary:'#FFB399',light:'#FFD6A6',pale:'#FFF0BE',sample:'#FF9A86',individual:'#FFD6A6',otherSurveyor:'#2563EB'};
+const THEME_COLORS={primary:'#4682A9',secondary:'#91C8E4',light:'#749BC2',pale:'#FFFBDE',sample:'#D62828',individual:'#7B2CBF',otherSurveyor:'#FF00A8'};
 let zoneLayersById = new Map();
 let selectedZoneId = '';
 let currentCalculation = null;
@@ -945,25 +945,37 @@ function sameObjectList(first,second){return Array.isArray(first)&&first.length=
 function zoneMapStyle(feature){
   const zone=featureZone(feature),id=zone==null?'':idKey(zone);
   const done=zone!=null&&currentCalculation?.completed.has(id);
-  if(id&&id===selectedZoneId)return {color:'#2563EB',weight:4,fillColor:'#60A5FA',fillOpacity:.5};
-  return {color:done?THEME_COLORS.secondary:THEME_COLORS.light,weight:mapIsAllView ? .7 : 1.4,fillColor:done?THEME_COLORS.secondary:THEME_COLORS.pale,fillOpacity:mapIsAllView ? .24 : .38};
+  if(id&&id===selectedZoneId)return {color:'#FF6B00',weight:4,fillColor:'#FF9D45',fillOpacity:.58};
+  return {color:done?'#4682A9':'#749BC2',weight:mapIsAllView ? 1 : 1.7,fillColor:done?'#91C8E4':'#FFFBDE',fillOpacity:mapIsAllView ? .34 : .48};
 }
 function highlightZoneOnMap(zoneId){
   selectedZoneId=zoneId;
   for(const [id,layers] of zoneLayersById)for(const layer of layers)layer.setStyle(zoneMapStyle(layer.feature));
 }
+function clearZoneHighlight(){
+  if(!selectedZoneId)return;
+  selectedZoneId='';
+  for(const layers of zoneLayersById.values())for(const layer of layers)layer.setStyle(zoneMapStyle(layer.feature));
+  map.closePopup();
+}
+function toggleZoneHighlight(zoneId){
+  if(!zoneId)return;
+  const id=idKey(zoneId);
+  if(selectedZoneId===id){clearZoneHighlight();return false;}
+  highlightZoneOnMap(id);return true;
+}
 function handleZoneMapTap(event){
   if(event.layer?._progressRow)return; // Preserve sample marker popups.
-  const directFeature=event.layer?.feature;
-  let zoneId=directFeature?featureZone(directFeature):null;
-  if(zoneId==null&&event.latlng){
+  if(event.layer?.feature)return; // The polygon's own handler handles taps on its path.
+  let zoneId=null;
+  if(event.latlng){
     const {lat,lng}=event.latlng;
     const hit=mapFeatureIndex.find(item=>item.bounds.contains(event.latlng)&&pointInPolygonGeometry([lng,lat],item.feature.geometry));
     if(hit)zoneId=featureZone(hit.feature);
   }
-  if(zoneId==null)return;
-  const id=idKey(zoneId);
-  highlightZoneOnMap(id);
+  if(zoneId==null){clearZoneHighlight();return;}
+  const id=idKey(zoneId),selected=toggleZoneHighlight(id);
+  if(!selected)return;
   const layer=zoneLayersById.get(id)?.[0];
   if(layer)layer.openPopup(event.latlng);
 }
@@ -989,7 +1001,7 @@ function renderVisibleMapFeatures(force=false){
         const creditText=credit?`<br>Rekap pemilik: ${escapeHtml(credit.surveyor)} • ${escapeHtml(fmtDate(credit.date))}`:'';
         if(id){if(!zoneLayersById.has(id))zoneLayersById.set(id,[]);zoneLayersById.get(id).push(layer);}
         layer.bindPopup(`<b>Zona ${escapeHtml(z)}</b><br>Geometri: ${geometryText}<br>Pemilik zona saat ini: ${ownerText}<br>Sampel terkumpul: ${n}<br>Status: ${done?'Target tercapai':'Belum tercapai'}${creditText}`);
-        layer.on('click',()=>{if(id)highlightZoneOnMap(id);});
+        layer.on('click',()=>{if(id)toggleZoneHighlight(id);});
       }
     }).addTo(map);
   }

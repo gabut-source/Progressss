@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { theme: { extend: { colors: { calm: { 50: '#F5F8FF', 100: '#DCE7FA', 500: '#C8102E', 600: '#1746A2', 700: '#0B2559' }, mist: '#EEF3FC', lilac: '#E5ECF8', orchid: '#E6A0AA' } } } };</script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=ui-ux-polish-2">
+  <link rel="stylesheet" href="style.css?v=palette-fffbde-1">
 </head>
 <body class="min-h-screen bg-calm-50 text-slate-800 antialiased">
   <header class="topbar sticky top-0 z-20 backdrop-blur-xl">
@@ -131,7 +131,7 @@
         <small id="sampleSearchHint">Cari berdasarkan nomor sampel pada kabupaten yang dipilih.</small>
       </div>
       <div id="map" role="application" aria-label="Peta polygon zona dan titik sampel"></div>
-      <p class="map-note">Target zona tetap 3 titik sampel. Data polygon dan titik sampel dimuat dari database bersama.</p>
+      <p class="map-note">Ketuk zona untuk menyorot dan melihat informasinya. Ketuk zona yang sama lagi atau area kosong untuk membatalkan pilihan. Target zona tetap 3 titik sampel.</p>
     </section>
 
     <div class="section-heading report-toolbar">
@@ -160,6 +160,6 @@
   <script src="data.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
-  <script src="app.js?v=mobile-zone-tap-1"></script>
+  <script src="app.js?v=palette-fffbde-1"></script>
 </body>
 </html>
