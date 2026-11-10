@@ -888,6 +888,28 @@ function zonesAtPoint(lon,lat,geo) {
   if(!geo)return [];
   return unique(zoneSpatialIndex(geo).filter(item=>lon>=item.bounds[0]&&lon<=item.bounds[2]&&lat>=item.bounds[1]&&lat<=item.bounds[3]&&pointInPolygonGeometry([lon,lat],item.feature.geometry)).map(item=>String(item.zone)));
 }
+async function assignSpreadsheetRowsToZones(rows,geo){
+  if(!zoneSpatialIndex(geo).length)throw new Error('Zona lengkap kabupaten belum tersedia. Unggah zona terlebih dahulu sebelum mengimpor sampel tanpa NOZN.');
+  const assigned=[];let unmatched=0,multipleMatches=0,matchedRows=0;
+  for(let index=0;index<rows.length;index++){
+    const row=rows[index];
+    if(row.zone){assigned.push(row);continue;}
+    const lon=Number(row.lon),lat=Number(row.lat);
+    const valid=Number.isFinite(lon)&&Number.isFinite(lat)&&Math.abs(lon)<=180&&Math.abs(lat)<=90;
+    const zones=valid?zonesAtPoint(lon,lat,geo):[];
+    if(!zones.length){unmatched++;assigned.push({...row,zone:'',zoneSource:'spatial'});}
+    else{
+      matchedRows++;
+      if(zones.length>1)multipleMatches++;
+      for(const zone of zones)assigned.push({...row,zone,zoneSource:'spatial'});
+    }
+    if((index+1)%100===0||index===rows.length-1){
+      setLoadingStatus(`Mencocokkan titik ke zona… ${Math.round((index+1)/rows.length*100)}%`);
+      await browserPaint();
+    }
+  }
+  return {rows:mergeRows([],assigned),unmatched,multipleMatches,matchedRows};
+}
 async function reassignSpatialRows(city,geo) {
   const rows=rowsByCity[city]||[]; const kept=rows.filter(r=>r.zoneSource!=='spatial');
   const spatial=rows.filter(r=>r.zoneSource==='spatial'); const points=new Map();
@@ -1169,6 +1191,10 @@ function update() {
 
 function normalizeHeader(obj) { const result={}; for (const [k,v] of Object.entries(obj)) result[String(k).trim().toLowerCase().replace(/[_*]/g,'').replace(/\s+/g,' ')]=v; return result; }
 function getField(obj,names) { for(const n of names){const k=n.toLowerCase().replace(/[_*]/g,'').replace(/\s+/g,' '); if(obj[k]!=null&&obj[k]!=='')return obj[k];} return null; }
+function hasSpreadsheetColumn(headers,names){
+  const keys=new Set(headers.map(name=>String(name).trim().toLowerCase().replace(/[_*]/g,'').replace(/\s+/g,' ')));
+  return names.some(name=>keys.has(name.toLowerCase().replace(/[_*]/g,'').replace(/\s+/g,' ')));
+}
 function normalizeDate(value) {
   if (value instanceof Date && !Number.isNaN(value.valueOf())) return `${value.getUTCFullYear()}-${String(value.getUTCMonth()+1).padStart(2,'0')}-${String(value.getUTCDate()).padStart(2,'0')}`;
   if (typeof value==='number'&&window.XLSX) { const d=XLSX.SSF.parse_date_code(value); if(d)return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`; }
@@ -1306,18 +1332,43 @@ document.getElementById('excelInput').addEventListener('change',async event=>{
     beginLoading('Membaca file Excel…');await browserPaint();
     if(!window.XLSX)throw new Error('Pustaka Excel tidak termuat. Periksa koneksi internet lalu muat ulang halaman.');
     const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
-    const required=['NOZN','Nomor Sampel','Nama Surveyor','Tanggal Pelaksanaan']; let raw=null;
-    for(const sheetName of wb.SheetNames){const data=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:null}); if(data.length&&required.every(k=>Object.keys(normalizeHeader(data[0])).includes(k.toLowerCase()))) {raw=data;break;}}
-    if(!raw)throw new Error('Kolom wajib tidak ditemukan: NOZN, Nomor Sampel, Nama Surveyor, dan Tanggal Pelaksanaan.');
+    const sampleHeaders=['Nomor Sampel','No Sampel'],surveyorHeaders=['Nama Surveyor','Surveyor'],dateHeaders=['Tanggal Pelaksanaan','Tanggal'];
+    const zoneHeaders=['NOZN','NO ZN','NO ZONA'],xHeaders=['X','Longitude','Lon'],yHeaders=['Y','Latitude','Lat'];
+    let raw=null,hasZoneColumn=false,hasCoordinateColumns=false;
+    for(const sheetName of wb.SheetNames){
+      const data=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:null});if(!data.length)continue;
+      const headers=Object.keys(data[0]),hasSample=hasSpreadsheetColumn(headers,sampleHeaders),hasSurveyor=hasSpreadsheetColumn(headers,surveyorHeaders),hasDate=hasSpreadsheetColumn(headers,dateHeaders);
+      const hasZone=hasSpreadsheetColumn(headers,zoneHeaders),hasCoordinates=hasSpreadsheetColumn(headers,xHeaders)&&hasSpreadsheetColumn(headers,yHeaders);
+      if(hasSample&&hasSurveyor&&hasDate&&(hasZone||hasCoordinates)){raw=data;hasZoneColumn=hasZone;hasCoordinateColumns=hasCoordinates;break;}
+    }
+    if(!raw)throw new Error('Kolom wajib belum lengkap. Sertakan Nomor Sampel, Nama Surveyor, Tanggal Pelaksanaan, serta NOZN atau pasangan koordinat X/Y (Longitude/Latitude).');
+    if(!hasZoneColumn&&!hasCoordinateColumns)throw new Error('NOZN tidak tersedia dan pasangan koordinat X/Y juga tidak ditemukan.');
     const imported=[];
     for(const row of raw){const r=normalizeHeader(row); const sample=getField(r,['Nomor Sampel','No Sampel']); const surveyor=getField(r,['Nama Surveyor','Surveyor']); const date=normalizeDate(getField(r,['Tanggal Pelaksanaan','Tanggal'])); if(sample==null||!surveyor||!date)continue;
       const x=getField(r,['X','Longitude','Lon']), y=getField(r,['Y','Latitude','Lat']);
-      imported.push({zone:text(getField(r,['NOZN','NO ZN','NO ZONA'])),sample:text(sample),ident:text(getField(r,['Nomor Identifikasi','ID Sampel']))||text(sample),surveyor:text(surveyor),date,lon:x==null||x===''?null:Number(x),lat:y==null||y===''?null:Number(y),zoneSource:'attribute',properties:row});
+      const zone=text(getField(r,['NOZN','NO ZN','NO ZONA']));
+      imported.push({zone,sample:text(sample),ident:text(getField(r,['Nomor Identifikasi','ID Sampel']))||text(sample),surveyor:text(surveyor),date,lon:x==null||x===''?null:Number(x),lat:y==null||y===''?null:Number(y),zoneSource:zone?'attribute':'spatial',properties:row});
     }
     if(!imported.length)throw new Error('Tidak ada baris sampel dengan tanggal dan surveyor yang valid.');
-    const city=citySelect.value;const cleanRows=mergeRows([],imported);
+    const city=citySelect.value;let cleanRows=mergeRows([],imported),spatialResult={unmatched:0,multipleMatches:0,matchedRows:0};
+    if(imported.some(row=>!row.zone)){
+      if(supabaseClient&&!remoteFullGeoLoaded.has(city)){
+        setLoadingStatus(`Memuat polygon lengkap ${city} untuk pencocokan sampel…`);await browserPaint();await loadRemoteCity(city);
+      }
+      const sourceZones=geoByCity[city]||(!supabaseClient?zoneDataForCity(city):null);
+      spatialResult=await assignSpreadsheetRowsToZones(imported,sourceZones);
+      cleanRows=spatialResult.rows;
+      if(spatialResult.unmatched||spatialResult.multipleMatches){
+        const notices=[];
+        if(spatialResult.unmatched)notices.push(`${spatialResult.unmatched} baris tidak masuk ke polygon mana pun; titiknya tetap disimpan tetapi tidak masuk hitungan zona`);
+        if(spatialResult.multipleMatches)notices.push(`${spatialResult.multipleMatches} titik berada di lebih dari satu polygon dan akan dihitung pada setiap zona yang cocok, mengikuti pencocokan spasial yang sudah digunakan aplikasi`);
+        if(!confirm(`${notices.join('. ')}.\n\nLanjutkan unggah?`)){statusLine.textContent='Unggahan dibatalkan setelah pemeriksaan pencocokan zona.';return;}
+      }
+    }
     setLoadingStatus('Mengganti data sampel lama dengan unggahan terbaru…');await saveSamples(city,cleanRows);rowsByCity[city]=cleanRows;setLoadingStatus('Memperbarui peta dan rekap…');await browserPaint();
-    shouldFit=true; rebuildFilters(); update(); statusLine.innerHTML=`Excel untuk <strong>${escapeHtml(city)}</strong> berhasil mengganti data: ${cleanRows.length.toLocaleString('id-ID')} baris.`;
+    shouldFit=true; rebuildFilters(); update();
+    const matchNote=imported.some(row=>!row.zone)?` • ${spatialResult.matchedRows.toLocaleString('id-ID')} titik cocok ke polygon${spatialResult.unmatched?` • ${spatialResult.unmatched.toLocaleString('id-ID')} titik belum masuk zona`:''}${spatialResult.multipleMatches?` • ${spatialResult.multipleMatches.toLocaleString('id-ID')} titik cocok ke beberapa zona`:''}`:'';
+    statusLine.innerHTML=`Excel/CSV untuk <strong>${escapeHtml(city)}</strong> berhasil mengganti data: ${dedupPoints(imported).length.toLocaleString('id-ID')} titik unik${matchNote}.`;
   }catch(error){statusLine.textContent=`Impor Excel gagal: ${error.message||error}`;alert(error.message||String(error));}
   finally{endLoading();event.target.value='';}
 });
