@@ -419,8 +419,10 @@ let userLocationAccuracy=null;
 let mapAllMarkersVisible=false;
 let mapSampleLabelsVisible=false;
 if (mapAvailable) {
-  map = L.map('map', { zoomControl: true, preferCanvas:true }).setView([-7.05,113.7], 9);
-  samplePointRenderer=L.canvas({padding:.25});
+  // Skip animated canvas transforms on dense polygon layers; redraw the final
+  // frame directly so zooming stays responsive on phones and lower-end PCs.
+  map = L.map('map', { zoomControl: true, preferCanvas:true, zoomAnimation:false, fadeAnimation:false, markerZoomAnimation:false }).setView([-7.05,113.7], 9);
+  samplePointRenderer=L.canvas({padding:.65,tolerance:4});
   const satelliteLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
     maxZoom:19,attribution:'Tiles &copy; Esri — Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
   }).addTo(map);
@@ -1003,7 +1005,9 @@ function handleZoneMapTap(event){
 }
 function renderVisibleMapFeatures(force=false){
   if(!mapAvailable)return;
-  const view=map.getBounds().pad(.12);
+  // Keep a wider working buffer around the viewport so small pans do not
+  // repeatedly tear down and rebuild the large GeoJSON canvas layer.
+  const view=map.getBounds().pad(.5);
   const visible=mapFeatureIndex.filter(item=>item.bounds.intersects(view)).map(item=>item.feature);
   if(!force&&sameObjectList(renderedPolygonFeatures,visible))return;
   if(polygonLayer)map.removeLayer(polygonLayer);
