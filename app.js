@@ -1121,6 +1121,55 @@ function downloadAchievementWorkbook(){
   XLSX.writeFile(workbook,`Rekap_${citySelect.value}_${date}.xlsx`);
 }
 
+function xmlEscape(value){
+  return String(value??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]));
+}
+function downloadSampleKml(){
+  const city=citySelect.value;
+  if(!city){alert('Pilih kabupaten terlebih dahulu sebelum mengunduh KML.');return;}
+  const rows=dedupPoints(currentRows()).filter(row=>{
+    const lat=Number(row.lat),lon=Number(row.lon);
+    return row.lat!=null&&row.lon!=null&&row.lat!==''&&row.lon!==''&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lon)<=180&&Math.abs(lat)<=90;
+  });
+  if(!rows.length){alert('Tidak ada titik sampel berkoordinat untuk diunduh pada pilihan ini.');return;}
+  const groups=new Map();
+  for(const row of rows){
+    const name=row._city||city;
+    if(!groups.has(name))groups.set(name,[]);
+    groups.get(name).push(row);
+  }
+  const dataValue=(row,aliases,fallback='')=>propertyValue(row.properties,aliases)??fallback;
+  const placemarks=[];
+  for(const [groupName,groupRows] of groups){
+    const points=groupRows.map(row=>{
+      const sample=row.sample??'';
+      const fields={
+        'Kabupaten':groupName,
+        'Nomor sampel':sample,
+        'Nomor identifikasi':row.ident??'',
+        'Zona (NOZN)':row.zone??'',
+        'Surveyor':row.surveyor??'',
+        'Tanggal':row.date??'',
+        'Jenis data':dataValue(row,['JENIS_DATA','JENISDATA']),
+        'Nilai tanah/m²':landValueForSample(row)??'',
+        'Harga':dataValue(row,['HARGA','HARGA_TANAH','HARGA_ZNT','PRICE']),
+        'Luas':dataValue(row,['LUAS','LUAS_TANAH','LUAS_BIDANG','LUAS_M2','AREA','AREA_M2','SHAPE_AREA'])
+      };
+      const extendedData=Object.entries(fields).map(([name,value])=>`        <Data name="${xmlEscape(name)}"><value>${xmlEscape(value)}</value></Data>`);
+      for(const [name,value] of Object.entries(row.properties||{})){
+        if(value==null||String(value)===''||Object.prototype.hasOwnProperty.call(fields,name))continue;
+        extendedData.push(`        <Data name="${xmlEscape(name)}"><value>${xmlEscape(value)}</value></Data>`);
+      }
+      return `      <Placemark>\n        <name>${xmlEscape(sample||'Titik sampel')}</name>\n        <ExtendedData>\n${extendedData.join('\n')}\n        </ExtendedData>\n        <Point><coordinates>${Number(row.lon)},${Number(row.lat)},0</coordinates></Point>\n      </Placemark>`;
+    });
+    placemarks.push(`    <Folder>\n      <name>${xmlEscape(groupName)}</name>\n${points.join('\n')}\n    </Folder>`);
+  }
+  const kml=`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Titik Sampel - ${xmlEscape(city)}</name>\n${placemarks.join('\n')}\n</Document></kml>`;
+  const url=URL.createObjectURL(new Blob([kml],{type:'application/vnd.google-earth.kml+xml;charset=utf-8'}));
+  const link=document.createElement('a');link.href=url;link.download=`Titik_Sampel_${city.replace(/[^a-z0-9_-]+/gi,'_')}.kml`;
+  document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 function update() {
   const city=citySelect.value; const isAll=city==='ALL'; const selectedPerson=surveyorSelect.value;
   document.getElementById('adminCityName').textContent=city||'Belum dipilih';
@@ -1484,6 +1533,7 @@ document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
   if(row){event.preventDefault();zoomToZone(row.dataset.zoneId);}
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
+document.getElementById('downloadSampleKmlButton').addEventListener('click',downloadSampleKml);
 document.getElementById('sampleSearchInput').addEventListener('input',event=>renderSampleSearchResults(event.currentTarget.value));
 document.getElementById('sampleSearchInput').addEventListener('keydown',event=>{
   if(event.key==='Escape')closeSampleSearchResults();
