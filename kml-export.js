@@ -191,7 +191,8 @@ window.ProgressKml = (() => {
       const label = interiorPoint(labelPolygon);
       const geometryXml = transformedPolygons.map(polygon => polygonXml(polygon, (x, y) => [x, y]));
       geometryXml.push(`<Point><coordinates>${label[0]},${label[1]},0</coordinates></Point>`);
-      const placemark = `<Placemark><name>${xmlEscape(zone.zone)}</name><visibility>1</visibility><styleUrl>#${styleId}</styleUrl><ExtendedData>${extendedData(zone, partType, zone.properties)}</ExtendedData><MultiGeometry>${geometryXml.join('')}</MultiGeometry></Placemark>`;
+      // Show the remaining sample count as the map label; NOZN remains in ExtendedData for click details.
+      const placemark = `<Placemark><name>${xmlEscape(zone.sampleCount)}</name><visibility>1</visibility><styleUrl>#${styleId}</styleUrl><ExtendedData>${extendedData(zone, partType, zone.properties)}</ExtendedData><MultiGeometry>${geometryXml.join('')}</MultiGeometry></Placemark>`;
       const folderName = zone.city || cityLabel || 'Kabupaten';
       if (!folders.has(folderName)) folders.set(folderName, []);
       folders.get(folderName).push(placemark);
