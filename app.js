@@ -1170,6 +1170,88 @@ function downloadSampleKml(){
   document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
+function remainingKmlScopeCities(city){return city==='ALL'?districtNames():[city];}
+function kmlOwnerNames(geo){
+  const owners=[];
+  for(const feature of geo?.features||[]){
+    const assigned=unique(feature.properties?._zone_surveyors||[]);
+    if(assigned.length===1)owners.push(assigned[0]);
+  }
+  return unique(owners).sort((a,b)=>a.localeCompare(b,'id'));
+}
+function collectRemainingKmlZones(cities,geosByCity,rowsByCityData,surveyor,isAllView){
+  const rows=isAllView?cities.flatMap(city=>(rowsByCityData[city]||[]).map(row=>({...row,_city:city,zone:row.zone?`${city} • ${row.zone}`:row.zone}))):(rowsByCityData[cities[0]]||[]);
+  const countByZone=calculate(rows,TARGET_SAMPLES_PER_ZONE).zoneSampleCounts;
+  const grouped=new Map();
+  for(const city of cities){
+    const geo=geosByCity[city];if(!geo)continue;
+    for(const feature of geo.features||[]){
+      const rawZone=featureZone(feature);if(rawZone==null||String(rawZone).trim()==='')continue;
+      const owners=unique(feature.properties?._zone_surveyors||[]);
+      if(owners.length!==1||normalizedField(owners[0])!==normalizedField(surveyor))continue;
+      const progressZone=isAllView?`${city} • ${rawZone}`:String(rawZone);
+      const key=`${city}\u0000${idKey(rawZone)}`,sampleCount=countByZone.get(idKey(progressZone))||0;
+      if(sampleCount>=TARGET_SAMPLES_PER_ZONE)continue;
+      if(!grouped.has(key))grouped.set(key,{city,zone:String(rawZone),sampleCount,surveyor,geometries:[],properties:feature.properties||{},crs:geo.crs||feature.crs||null});
+      grouped.get(key).geometries.push(feature.geometry);
+    }
+  }
+  return [...grouped.values()];
+}
+async function openRemainingKmlDialog(){
+  const city=citySelect.value,dialog=document.getElementById('remainingKmlDialog');
+  const select=document.getElementById('remainingKmlSurveyor'),message=document.getElementById('remainingKmlMessage');
+  const confirm=document.getElementById('confirmRemainingKmlButton');
+  if(!city){alert('Pilih kabupaten terlebih dahulu untuk memilih surveyor zona.');return;}
+  beginLoading('Memuat daftar surveyor untuk KML sisa…');
+  try{
+    if(city==='ALL')await loadAllRemoteCities();
+    else if(supabaseClient)await loadRemoteCity(city,{overview:true});
+    const geos=remainingKmlScopeCities(city).map(name=>zoneDataForCity(name)).filter(Boolean);
+    const owners=unique(geos.flatMap(geo=>kmlOwnerNames(geo))).sort((a,b)=>a.localeCompare(b,'id'));
+    select.replaceChildren();
+    for(const owner of owners){const option=document.createElement('option');option.value=owner;option.textContent=owner;select.append(option);}
+    dialog.dataset.scopeCity=city;
+    confirm.disabled=!owners.length;
+    message.textContent=owners.length?'Pilih surveyor. Semua sampel pada zona tersebut ikut dihitung, dari surveyor mana pun.':'Belum ada pembagian zona per surveyor pada kabupaten ini. Unggah zona per surveyor terlebih dahulu.';
+    endLoading();dialog.showModal();
+  }catch(error){
+    endLoading();message.textContent=`Daftar surveyor tidak dapat dimuat: ${error.message||error}`;confirm.disabled=true;dialog.showModal();
+  }
+}
+async function downloadRemainingKml(){
+  const dialog=document.getElementById('remainingKmlDialog');
+  const message=document.getElementById('remainingKmlMessage');
+  const confirm=document.getElementById('confirmRemainingKmlButton');
+  const city=dialog.dataset.scopeCity||citySelect.value,surveyor=document.getElementById('remainingKmlSurveyor').value;
+  if(!surveyor){message.textContent='Pilih surveyor terlebih dahulu.';return;}
+  confirm.disabled=true;beginLoading(`Menyiapkan polygon lengkap untuk ${surveyor}…`);
+  try{
+    const cities=remainingKmlScopeCities(city);
+    for(let index=0;index<cities.length;index++){
+      const name=cities[index];
+      setLoadingStatus(`Memuat geometri zona lengkap ${name} (${index+1}/${cities.length})…`);
+      if(supabaseClient&&!remoteFullGeoLoaded.has(name))await loadRemoteCity(name);
+      await browserPaint();
+    }
+    const fullGeosByCity={};
+    for(const name of cities){
+      const geo=geoByCity[name];
+      if(Array.isArray(geo?.features))fullGeosByCity[name]=geo;
+      else if(geo||geoOverviewByCity[name]||remoteZoneMetadata.has(name))throw new Error(`Geometri zona lengkap ${name} belum tersedia; KML tidak dibuat dari polygon tampilan ringkas.`);
+    }
+    const zones=collectRemainingKmlZones(cities,fullGeosByCity,rowsByCity,surveyor,city==='ALL');
+    if(!zones.length){message.textContent=`${surveyor} tidak memiliki zona dengan jumlah sampel di bawah ${TARGET_SAMPLES_PER_ZONE}.`;return;}
+    const kml=window.ProgressKml.buildRemainingZonesKml(zones,surveyor,city);
+    const blob=new Blob([kml],{type:'application/vnd.google-earth.kml+xml;charset=utf-8'}),url=URL.createObjectURL(blob);
+    const safe=value=>String(value).normalize('NFKD').replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'');
+    const link=document.createElement('a');link.href=url;link.download=`KML_Sisa_${safe(surveyor)}_${safe(city)}.kml`;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    dialog.close();statusLine.textContent=`KML sisa berhasil diunduh untuk ${surveyor}: ${zones.length.toLocaleString('id-ID')} zona dengan sampel di bawah ${TARGET_SAMPLES_PER_ZONE}.`;
+  }catch(error){message.textContent=`KML sisa tidak dapat dibuat: ${error.message||error}`;}
+  finally{endLoading();confirm.disabled=false;}
+}
+
 function update() {
   const city=citySelect.value; const isAll=city==='ALL'; const selectedPerson=surveyorSelect.value;
   document.getElementById('adminCityName').textContent=city||'Belum dipilih';
@@ -1258,10 +1340,10 @@ function normalizeDate(value) {
 }
 
 function featureCollection(value) {
-  const items=Array.isArray(value)?value:[value]; const features=[];
-  for(const item of items){if(item?.type==='FeatureCollection')features.push(...item.features);else if(item?.type==='Feature')features.push(item);}
+  const items=Array.isArray(value)?value:[value]; const features=[];let crs=null;
+  for(const item of items){if(!crs&&item?.crs)crs=item.crs;if(item?.type==='FeatureCollection')features.push(...item.features);else if(item?.type==='Feature')features.push(item);}
   if(!features.length)throw new Error('Tidak ditemukan feature SHP/GeoJSON.');
-  return {type:'FeatureCollection',features};
+  return {type:'FeatureCollection',...(crs?{crs}:{}),features};
 }
 function namedShapefileCollections(parsed,archiveName=''){
   if(parsed?.type==='FeatureCollection'||parsed?.type==='Feature'){
@@ -1534,6 +1616,9 @@ document.getElementById('zoneSampleTable').addEventListener('keydown',event=>{
 });
 document.getElementById('downloadReportButton').addEventListener('click',downloadAchievementWorkbook);
 document.getElementById('downloadSampleKmlButton').addEventListener('click',downloadSampleKml);
+document.getElementById('downloadRemainingKmlButton').addEventListener('click',openRemainingKmlDialog);
+document.getElementById('confirmRemainingKmlButton').addEventListener('click',downloadRemainingKml);
+document.getElementById('cancelRemainingKmlButton').addEventListener('click',()=>document.getElementById('remainingKmlDialog').close());
 document.getElementById('sampleSearchInput').addEventListener('input',event=>renderSampleSearchResults(event.currentTarget.value));
 document.getElementById('sampleSearchInput').addEventListener('keydown',event=>{
   if(event.key==='Escape')closeSampleSearchResults();
